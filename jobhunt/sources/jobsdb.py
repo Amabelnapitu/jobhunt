@@ -2,6 +2,8 @@
 
 from collections.abc import Iterator
 
+from bs4 import BeautifulSoup
+
 from ..http import get
 from ..models import Job
 
@@ -54,3 +56,23 @@ def parse_item(item: dict, query: str = "") -> Job:
         snippet=snippet,
         query=query,
     )
+
+
+APPLY_URL = "https://hk.jobsdb.com/job/{id}/apply"
+
+
+def fetch_details(job_id: str) -> dict:
+    return parse_detail(get(JOB_URL.format(id=job_id)).text, job_id)
+
+
+def parse_detail(html: str, job_id: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    desc = soup.select_one('[data-automation="jobAdDetails"]')
+    return {
+        "description": desc.get_text("\n", strip=True) if desc else "",
+        # JobsDB routes every application (Quick Apply or the employer's own form) through this page.
+        "apply_url": APPLY_URL.format(id=job_id),
+        "apply_method": "jobsdb",
+        "applicants": None,
+        "seniority": "",
+    }

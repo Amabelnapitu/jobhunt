@@ -1,6 +1,8 @@
 """LinkedIn public (logged-out) job search. No login or cookies are used."""
 
+import re
 from collections.abc import Iterator
+from urllib.parse import parse_qs, unquote, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -51,3 +53,43 @@ def parse_html(html: str, query: str = "") -> list[Job]:
             query=query,
         ))
     return jobs
+
+
+DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{id}"
+
+
+def fetch_details(job_id: str) -> dict:
+    return parse_detail(get(DETAIL_URL.format(id=job_id)).text)
+
+
+def parse_detail(html: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    desc = soup.select_one(".show-more-less-html__markup") or soup.select_one(".description__text")
+    details = {"description": desc.get_text("\n", strip=True) if desc else "",
+               "apply_url": "", "apply_method": "linkedin_easy_apply", "applicants": None, "seniority": ""}
+
+    caption = soup.select_one(".num-applicants__caption")
+    if caption:
+        text = caption.get_text(" ", strip=True).lower()
+        digits = re.search(r"(\d[\d,]*)", text)
+        if "first" in text:            # "Be among the first 25 applicants"
+            details["applicants"] = 0
+        elif digits:                   # "37 applicants", "Over 200 applicants"
+            details["applicants"] = int(digits.group(1).replace(",", ""))
+
+    # Off-site applications hide the employer's URL in a commented-out <code id="applyUrl">.
+    code = soup.select_one("code#applyUrl")
+    if code:
+        found = re.search(r'"(https?://[^"]+)"', code.decode_contents())
+        if found:
+            url = found.group(1)
+            target = parse_qs(urlparse(url).query).get("url")
+            details["apply_url"] = unquote(target[0]) if target else url
+            details["apply_method"] = "external"
+
+    for item in soup.select(".description__job-criteria-item"):
+        label = item.select_one(".description__job-criteria-subheader")
+        value = item.select_one(".description__job-criteria-text")
+        if label and value and "seniority" in label.get_text().lower():
+            details["seniority"] = value.get_text(strip=True)
+    return details

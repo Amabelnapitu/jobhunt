@@ -37,6 +37,32 @@ location = "Hong Kong"
 days = 14            # only jobs posted within this many days (where the source supports it)
 max_pages = 3        # pages per query per source
 
+# Facts about you that decide eligibility. Only what you've confirmed; edit if anything changes.
+[candidate]
+work_rights = "IANG"            # Hong Kong IANG visa: no sponsorship needed
+permanent_resident = false
+# Experience: APM at FWD since June 2026 (contract ends Dec 2026), plus internships.
+max_years_qualified = 1         # postings asking for up to this many years: qualified
+max_years_stretch = 2           # up to this many: shown as a stretch ("check"); more: not eligible
+[candidate.languages]           # none | basic | conversational | fluent | native
+english = "fluent"
+korean = "fluent"
+bahasa = "native"
+mandarin = "conversational"
+cantonese = "none"
+written_chinese = "none"
+
+[ranking]
+daily_picks = 20                # how many top jobs to put up for applying each day
+# Weights for rank_score (0-100). Ineligible jobs are never ranked.
+fit = 0.40                      # match with this profile
+interview = 0.35                # estimated chance of an interview
+freshness = 0.25                # newer postings first
+fit_full_marks = 50             # keyword score that counts as a perfect fit
+check_factor = 0.85             # discount for "check" jobs (stretch or unclear)
+detail_min_score = 10           # only open the job page for jobs scoring at least this
+max_details_per_run = 80        # politeness cap on job pages opened per run
+
 [scoring]
 # Whole-word/phrase matches, case-insensitive. Weight counts x2 if found in the title, x1 if only in the snippet.
 [scoring.keywords]

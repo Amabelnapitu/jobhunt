@@ -1,11 +1,14 @@
 """Scrape Hong Kong job boards, rank results against profile.toml, and store them in SQLite.
 
-    python -m jobhunt                          # scrape all sources (same as `scrape`)
+    python -m jobhunt                          # scrape, open job pages, rank, pick today's top 20
     python -m jobhunt scrape --sources jobsdb  # one source
     python -m jobhunt list --status new        # show stored jobs
     python -m jobhunt list --category product  # one role family
     python -m jobhunt mark 42 applied --notes "via referral"
     python -m jobhunt export                   # write output/jobs.csv for Excel
+    python -m jobhunt picks                    # today's top picks
+    python -m jobhunt import-state DIR         # load the dashboard's saved jobs/tracking docs
+    python -m jobhunt export-sync DIR          # write documents + batches for the dashboard
 """
 
 import argparse
@@ -13,7 +16,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-from . import storage
+from . import pipeline, storage
 from .models import Job
 from .scoring import score_job
 from .sources import SOURCES
@@ -48,13 +51,16 @@ def scrape(args, conn) -> None:
     new = storage.save_jobs(conn, run_id, jobs, queries)
     # Re-score older jobs too, so edits to profile.toml apply to them.
     storage.rescore(conn, lambda j: score_job(j, scoring, categories))
+    if not args.no_details:
+        pipeline.fetch_details(conn, profile)
+    pipeline.rank_all(conn, profile)
+    picks = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20))
     exported = storage.export_csv(conn, args.out, args.min_score)
 
-    print(f"\n{len(jobs)} jobs this run, {len(new)} new. Database: {args.db}, CSV: {args.out} ({exported} rows)\n")
-    this_run = sorted((j for j in jobs if j.score >= args.min_score), key=lambda j: -j.score)
-    for job in this_run[: args.top]:
-        flag = "NEW " if job.key in new else "    "
-        print(f"{flag}{job.score:>4}  {job.category:<17}  {job.title[:55]:<55}  {job.company[:28]:<28}  {job.url}")
+    print(f"\n{len(jobs)} jobs this run, {len(new)} new. {pipeline.summary(conn)}")
+    print(f"Database: {args.db}, CSV: {args.out} ({exported} rows)\n\nToday's top {len(picks)}:")
+    for r in picks:
+        print(pipeline.describe(r))
 
 
 def list_jobs(args, conn) -> None:
@@ -68,6 +74,24 @@ def mark(args, conn) -> None:
     if not storage.set_status(conn, args.id, args.status, args.notes):
         sys.exit(f"No job with id {args.id}")
     print(f"Job {args.id} -> {args.status}")
+
+
+def picks(args, conn) -> None:
+    rows = conn.execute("SELECT * FROM jobs WHERE pick_date = (SELECT MAX(pick_date) FROM jobs) "
+                        "ORDER BY rank_score DESC").fetchall()
+    for r in rows:
+        print(f"{r['id']:>5}  {pipeline.describe(r)}  {r['apply_url'] or r['url']}")
+
+
+def import_state(args, conn) -> None:
+    n_jobs, n_tracking = storage.import_state(conn, args.dir)
+    print(f"Imported {n_jobs} jobs and {n_tracking} tracking records from {args.dir}")
+
+
+def export_sync(args, conn) -> None:
+    profile = load_profile(args.profile)
+    pipeline.rank_all(conn, profile)  # freshness changes daily
+    print(storage.export_sync(conn, args.dir))
 
 
 def export(args, conn) -> None:
@@ -89,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--days", type=int, help="override [search].days")
     p.add_argument("--max-pages", type=int, help="override [search].max_pages")
     p.add_argument("--min-score", type=int, default=0, help="hide jobs scoring below this")
-    p.add_argument("--top", type=int, default=25, help="how many to print")
+    p.add_argument("--no-details", action="store_true", help="skip opening job pages")
     p.set_defaults(func=scrape)
 
     p = sub.add_parser("list", parents=[common], help="show stored jobs, best first")
@@ -104,6 +128,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("status", choices=storage.STATUSES)
     p.add_argument("--notes")
     p.set_defaults(func=mark)
+
+    p = sub.add_parser("picks", parents=[common], help="show the latest daily top picks")
+    p.set_defaults(func=picks)
+
+    p = sub.add_parser("import-state", parents=[common], help="load dashboard docs saved by ArtifactData")
+    p.add_argument("dir", type=Path, help="folder containing jobs/ and tracking/ JSON files")
+    p.set_defaults(func=import_state)
+
+    p = sub.add_parser("export-sync", parents=[common], help="write dashboard documents and batches")
+    p.add_argument("dir", type=Path)
+    p.add_argument("--profile", type=Path, default=Path("profile.toml"))
+    p.set_defaults(func=export_sync)
 
     p = sub.add_parser("export", parents=[common], help="write the database to CSV")
     p.add_argument("--out", type=Path, default=Path("output/jobs.csv"))
