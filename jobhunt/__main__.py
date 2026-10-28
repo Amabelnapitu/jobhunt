@@ -16,7 +16,8 @@ import sys
 import tomllib
 from pathlib import Path
 
-from . import pipeline, storage
+from . import enrich, pipeline, storage
+from .http import RateLimited
 from .models import Job
 from .scoring import score_job
 from .sources import SOURCES
@@ -44,6 +45,9 @@ def scrape(args, conn) -> None:
                     queries.setdefault(job.key, set()).add(query)
                     count += 1
                 print(f"[{name}] {query!r}: {count} results", file=sys.stderr)
+            except RateLimited as exc:  # the site asked us to slow down: stop asking it today
+                print(f"[{name}] {exc}", file=sys.stderr)
+                break
             except Exception as exc:  # one broken source/query shouldn't kill the run
                 print(f"[{name}] {query!r}: FAILED ({exc})", file=sys.stderr)
 
@@ -53,6 +57,7 @@ def scrape(args, conn) -> None:
     storage.rescore(conn, lambda j: score_job(j, scoring, categories))
     if not args.no_details:
         pipeline.fetch_details(conn, profile)
+        enrich.enrich(conn, profile.get("ranking", {}).get("max_enrich_per_run", 40))
     pipeline.rank_all(conn, profile)
     picks = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20))
     exported = storage.export_csv(conn, args.out, args.min_score)
@@ -90,8 +95,10 @@ def import_state(args, conn) -> None:
 
 def export_sync(args, conn) -> None:
     profile = load_profile(args.profile)
+    scoring, categories = profile.get("scoring", {}), profile.get("categories", {})
+    storage.rescore(conn, lambda j: score_job(j, scoring, categories))
     pipeline.rank_all(conn, profile)  # freshness changes daily
-    print(storage.export_sync(conn, args.dir))
+    print(storage.export_sync(conn, args.dir, note=args.note or ""))
 
 
 def export(args, conn) -> None:
@@ -139,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("export-sync", parents=[common], help="write dashboard documents and batches")
     p.add_argument("dir", type=Path)
     p.add_argument("--profile", type=Path, default=Path("profile.toml"))
+    p.add_argument("--note", help="short message shown on the dashboard for this run")
     p.set_defaults(func=export_sync)
 
     p = sub.add_parser("export", parents=[common], help="write the database to CSV")

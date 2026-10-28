@@ -1,0 +1,477 @@
+<title>HK Job Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a working desk. Run summary strip on top, tabs, then a ranked queue of job rows that expand into an application sheet. */
+:root {
+  --bg: #f3f6f5; --panel: #ffffff; --ink: #13201e; --muted: #5b6b68; --line: #d9e2df;
+  --jade: #0d7a6b; --jade-soft: #dff1ec; --amber: #a86a12; --amber-soft: #fbeed6;
+  --red: #b23f37; --red-soft: #f8e1df; --focus: #0d7a6b;
+  --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1716; --panel: #172220; --ink: #e5eeec; --muted: #93a6a2; --line: #2a3a37;
+  --jade: #4cc3ae; --jade-soft: #173832; --amber: #e3a44a; --amber-soft: #3a2c15;
+  --red: #ec7d73; --red-soft: #3d1f1c; --focus: #4cc3ae; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1716; --panel: #172220; --ink: #e5eeec; --muted: #93a6a2; --line: #2a3a37;
+  --jade: #4cc3ae; --jade-soft: #173832; --amber: #e3a44a; --amber-soft: #3a2c15;
+  --red: #ec7d73; --red-soft: #3d1f1c; --focus: #4cc3ae; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 400 15px/1.5 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 24px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0 }
+h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em }
+.sub { color: var(--muted); margin: 4px 0 0 }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 20px 0 }
+.stat { background: var(--panel); padding: 12px 14px }
+.stat b { display: block; font: 700 1.5rem/1.1 var(--display); font-variant-numeric: tabular-nums }
+.stat span { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .06em }
+nav { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 16px }
+nav button { font: 600 .95rem var(--body); background: none; border: 0; color: var(--muted); padding: 10px 12px;
+  border-bottom: 2px solid transparent; cursor: pointer }
+nav button[aria-selected="true"] { color: var(--ink); border-color: var(--jade) }
+nav button .n { font: 500 .75rem var(--mono); margin-left: 4px; color: var(--muted) }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 2px }
+.hint { color: var(--muted); font-size: .9rem; margin: 0 0 12px }
+.list { display: flex; flex-direction: column; gap: 8px }
+.job { background: var(--panel); border: 1px solid var(--line); border-radius: 10px }
+.row { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 12px 14px; cursor: pointer; width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit }
+.rank { font: 500 .85rem var(--mono); color: var(--muted); text-align: right }
+.title { font: 700 1.02rem/1.3 var(--display); min-width: 0 }
+.meta { color: var(--muted); font-size: .88rem; display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: end; align-items: center }
+.pill { font: 600 .72rem/1 var(--body); text-transform: uppercase; letter-spacing: .05em; padding: 5px 8px;
+  border-radius: 999px; white-space: nowrap }
+.p-eligible { background: var(--jade-soft); color: var(--jade) }
+.p-check { background: var(--amber-soft); color: var(--amber) }
+.p-ineligible { background: var(--red-soft); color: var(--red) }
+.p-ready { background: var(--jade); color: var(--panel) }
+.p-applied { background: var(--ink); color: var(--panel) }
+.p-need { border: 1px solid var(--line); color: var(--muted) }
+.score { font: 500 .8rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; min-width: 3.2rem; text-align: right }
+.sheet { border-top: 1px solid var(--line); padding: 16px 14px 18px; display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px }
+.sheet h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px }
+.bars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; font-size: .88rem; margin-bottom: 14px }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden }
+.bar i { display: block; height: 100%; background: var(--jade) }
+.reasons { margin: 0 0 14px; padding-left: 18px; color: var(--amber) }
+.reasons.bad { color: var(--red) }
+.desc { white-space: pre-wrap; font-size: .9rem; max-height: 260px; overflow: auto; border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; background: var(--bg) }
+.links { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 0 }
+a { color: var(--jade); font-weight: 600 }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px }
+.field label { font-weight: 600; font-size: .9rem }
+.field small { color: var(--muted) }
+input[type=text], textarea, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; width: 100% }
+textarea { min-height: 72px; resize: vertical }
+.check { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px }
+.check input { margin-top: 4px; accent-color: var(--jade) }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px }
+.btn { font: 600 .92rem var(--body); border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink) }
+.btn.primary { background: var(--jade); border-color: var(--jade); color: var(--panel) }
+.btn:disabled { opacity: .45; cursor: not-allowed }
+.progress { font-size: .88rem; color: var(--muted) }
+.empty { background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; padding: 28px 20px; text-align: center; color: var(--muted) }
+.empty h2 { color: var(--ink); font-size: 1.1rem; margin-bottom: 6px }
+.profile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px }
+.profile .wide { grid-column: 1 / -1 }
+.saved { font-size: .82rem; color: var(--muted); min-height: 1.2em }
+.how { margin-top: 28px; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); padding-top: 14px }
+.how ol { padding-left: 18px; margin: 6px 0 0 }
+.banner { background: var(--red-soft); color: var(--red); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px }
+@media (max-width: 720px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .sheet, .profile { grid-template-columns: minmax(0, 1fr) }
+  .row { grid-template-columns: 1.75rem minmax(0, 1fr) }
+  .chips { grid-column: 2; justify-content: start }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>HK Job Desk</h1>
+      <p class="sub" id="runline">Waiting for the first morning run.</p>
+    </div>
+  </header>
+
+  <div class="stats" aria-live="polite">
+    <div class="stat"><b id="s-picks">0</b><span>Today's picks</span></div>
+    <div class="stat"><b id="s-need">0</b><span>Need your input</span></div>
+    <div class="stat"><b id="s-ready">0</b><span>Ready to apply</span></div>
+    <div class="stat"><b id="s-applied">0</b><span>Applied</span></div>
+  </div>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <nav role="tablist" aria-label="Views">
+    <button role="tab" id="tab-today" data-view="today" aria-selected="true">Today's 20<span class="n" id="n-today"></span></button>
+    <button role="tab" id="tab-all" data-view="all" aria-selected="false">All ranked<span class="n" id="n-all"></span></button>
+    <button role="tab" id="tab-applied" data-view="applied" aria-selected="false">Applied<span class="n" id="n-applied"></span></button>
+    <button role="tab" id="tab-excluded" data-view="excluded" aria-selected="false">Excluded<span class="n" id="n-excluded"></span></button>
+    <button role="tab" id="tab-me" data-view="me" aria-selected="false">My details</button>
+  </nav>
+
+  <p class="hint" id="viewhint"></p>
+  <div id="view"></div>
+
+  <section class="how">
+    <strong>How applying works</strong>
+    <ol>
+      <li>Each morning the scraper ranks new jobs and picks today's top 20 you haven't applied to.</li>
+      <li>Open a job, fill in what it asks for, tick the documents you have, then press <em>Ready to apply</em>.</li>
+      <li>In the Claude app, say <em>"apply to my ready jobs"</em>. Claude fills each application in your browser,
+        shows you the filled form, and submits only after your OK. Nothing is invented: anything missing comes back to you as a question.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const PROFILE_FIELDS = [
+  { id: "expected_salary", label: "Expected salary", hint: "e.g. HK$ per month, or a range" },
+  { id: "current_salary", label: "Current salary", hint: "Some HK employers ask for it" },
+  { id: "availability", label: "Availability / notice period", hint: "Your FWD contract ends December 2026" },
+  { id: "right_to_work", label: "Right to work / visa status", hint: "How you want your IANG status described" },
+  { id: "linkedin", label: "LinkedIn URL", hint: "" },
+  { id: "portfolio", label: "Portfolio / GitHub URL", hint: "" },
+  { id: "phone", label: "Phone for applications", hint: "" },
+  { id: "email", label: "Email for applications", hint: "" },
+  { id: "notes", label: "Anything Claude should always know when applying", hint: "Preferences, things to never claim, wording you like", wide: true },
+];
+// Job-posting info labels (from the scraper) that map to a standing answer.
+const INFO_TO_PROFILE = {
+  "Expected salary": "expected_salary", "Current salary": "current_salary",
+  "Availability / notice period": "availability", "Right to work / visa status": "right_to_work",
+};
+// CV versions saved in your Google Drive, suggested by role family.
+const CV_VERSIONS = ["PM", "BA", "Data Based", "Insurance Product", "Consulting", "Quant Finance", "KEY"];
+const CV_FOR = { product: "PM", business_analysis: "BA", ai_data: "Data Based", actuarial_finance: "Insurance Product", project: "PM" };
+const HINTS = {
+  today: "Today's top picks you haven't applied to, best first. Rank mixes fit, interview odds and how recently it was posted.",
+  all: "Every eligible or borderline job from recent runs, best first.",
+  applied: "Applications sent, newest first.",
+  excluded: "Jobs that fit your profile but that you can't apply to, with the reason.",
+  me: "Standing answers reused on every application. Each job's form starts from these; change them per job if needed.",
+};
+const DONE = ["applied", "interviewing", "offer", "rejected"];
+
+const state = { jobs: new Map(), tracking: new Map(), profile: {}, run: null, view: "today", open: new Set() };
+let db = null;
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function track(id) { return state.tracking.get(id) || {}; }
+function statusOf(id) { return track(id).status || "new"; }
+// A job's static details (jobs/<id>) merged with its current rank from the latest run.
+function getJob(id) {
+  const job = state.jobs.get(id), r = state.run && state.run.ranks ? state.run.ranks[id] : null;
+  return job && r ? { ...job, ...r, id } : null;
+}
+function allJobs() { return [...state.jobs.keys()].map(getJob).filter(Boolean); }
+function daysAgo(iso) {
+  if (!iso) return "date unknown";
+  const d = Math.round((Date.now() - new Date(iso.slice(0, 10) + "T00:00:00").getTime()) / 864e5);
+  return d <= 0 ? "posted today" : d === 1 ? "posted yesterday" : `posted ${d} days ago`;
+}
+const byRank = (a, b) => (b.rank_score ?? -1) - (a.rank_score ?? -1);
+
+// Everything the employer asks for, resolved against saved answers.
+function requirements(job) {
+  const t = track(job.id);
+  const answers = t.answers || {}, docs = t.docs || {};
+  const info = (job.info_needed || []).map(label => {
+    const pf = INFO_TO_PROFILE[label];
+    const value = answers[label] ?? (pf ? state.profile[pf] : "") ?? "";
+    return { label, value: value || "", fromProfile: answers[label] == null && !!(pf && state.profile[pf]) };
+  });
+  const documents = (job.documents || ["CV / resume"]).map(label => ({ label, ready: !!docs[label] }));
+  const coverNeeded = documents.some(d => d.label === "Cover letter");
+  const coverOk = !coverNeeded || !!(t.cover_letter || "").trim() || !!t.draft_cover_letter;
+  const cvChoice = t.cv_version || CV_FOR[job.category] || "PM";
+  const missing = info.filter(i => !i.value.trim()).length
+    + documents.filter(d => !d.ready && d.label !== "Cover letter").length + (coverOk ? 0 : 1);
+  const total = info.length + documents.length;
+  return { info, documents, coverNeeded, coverOk, cvChoice, missing, total };
+}
+
+function pillFor(job) {
+  const s = statusOf(job.id);
+  if (DONE.includes(s)) return `<span class="pill p-applied">${esc(s)}</span>`;
+  if (s === "ready") return `<span class="pill p-ready">Ready</span>`;
+  if (job.eligibility === "ineligible") return `<span class="pill p-ineligible">Not eligible</span>`;
+  const r = requirements(job);
+  const elig = job.eligibility === "check" ? `<span class="pill p-check">Check</span>` : "";
+  return elig + (r.missing ? `<span class="pill p-need">${r.missing} to fill</span>` : `<span class="pill p-eligible">Complete</span>`);
+}
+
+function rowHTML(job, i) {
+  const open = state.open.has(job.id);
+  const meta = [job.company, job.location, daysAgo(job.posted), job.applicants != null ? `${job.applicants} applicants` : "", job.salary]
+    .filter(Boolean).map(esc).map(s => `<span>${s}</span>`).join("");
+  return `<article class="job" data-id="${job.id}">
+    <button class="row" aria-expanded="${open}" data-toggle="${job.id}">
+      <span class="rank">${i + 1}</span>
+      <span style="min-width:0"><span class="title">${esc(job.title)}</span><span class="meta">${meta}</span></span>
+      <span class="chips">${pillFor(job)}<span class="score" title="Rank score out of 100">${job.rank_score != null ? job.rank_score.toFixed(1) : "–"}</span></span>
+    </button>
+    ${open ? sheetHTML(job) : ""}
+  </article>`;
+}
+
+function bar(label, v) {
+  const n = Math.max(0, Math.min(100, Math.round(v || 0)));
+  return `<span>${label}</span><span class="bar"><i style="width:${n}%"></i></span><span class="score">${n}</span>`;
+}
+
+function sheetHTML(job) {
+  const t = track(job.id), r = requirements(job), id = job.id, s = statusOf(id);
+  const fit = Math.min(100, (job.score || 0) * 2);
+  const reasons = (job.reasons || []).length
+    ? `<ul class="reasons ${job.eligibility === "ineligible" ? "bad" : ""}">${job.reasons.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+  const langs = Object.entries(job.languages || {}).map(([k, v]) => `${k.replace("_", " ")} (${v})`).join(", ");
+  const how = { jobsdb: "via JobsDB", linkedin_easy_apply: "LinkedIn Easy Apply", external: "on the employer's site" }[job.apply_method] || "";
+  const infoFields = r.info.map((f, k) => `<div class="field">
+      <label for="i-${id}-${k}">${esc(f.label)}</label>
+      <input type="text" id="i-${id}-${k}" data-answer="${esc(f.label)}" data-job="${id}" value="${esc(f.value)}">
+      ${f.fromProfile ? `<small>From My details. Edit to change it for this job only.</small>` : ""}
+    </div>`).join("");
+  const docChecks = r.documents.filter(d => d.label !== "Cover letter").map((d, k) => `<label class="check">
+      <input type="checkbox" id="d-${id}-${k}" data-doc="${esc(d.label)}" data-job="${id}" ${d.ready ? "checked" : ""}>
+      <span>${esc(d.label)} ready${d.label === "CV / resume" ? " (uploaded to JobsDB/LinkedIn or on your computer)" : ""}</span></label>`).join("");
+  const cover = r.coverNeeded ? `<div class="field">
+      <label for="c-${id}">Cover letter</label>
+      <textarea id="c-${id}" data-cover="${id}" placeholder="Paste your cover letter, or tick the box below">${esc(t.cover_letter || "")}</textarea>
+      <label class="check"><input type="checkbox" id="cd-${id}" data-draft="${id}" ${t.draft_cover_letter ? "checked" : ""}>
+        <span>Ask Claude to draft one from my CV and this job. I'll approve it before it's sent.</span></label>
+    </div>` : "";
+  const applied = DONE.includes(s);
+  return `<div class="sheet">
+    <div style="min-width:0">
+      <h3>Why it ranks here</h3>
+      <div class="bars">${bar("Fit", fit)}${bar("Interview odds", job.interview)}${bar("Freshness", job.freshness)}</div>
+      ${reasons}
+      <p class="hint">${[job.category && job.category.replace("_", " "), job.years_required != null ? `asks for ${job.years_required} yr${job.years_required === 1 ? "" : "s"}` : "no years stated", langs && `languages: ${esc(langs)}`].filter(Boolean).join(" · ")}</p>
+      <h3>From the posting</h3>
+      <div class="desc">${esc(job.description || "Description not fetched yet.")}</div>
+      <div class="links">
+        <a href="${esc(job.url)}" target="_blank" rel="noopener">Open posting</a>
+        ${job.apply_url ? `<a href="${esc(job.apply_url)}" target="_blank" rel="noopener">Application page ${how ? "(" + esc(how) + ")" : ""}</a>` : ""}
+      </div>
+    </div>
+    <div style="min-width:0">
+      ${job.eligibility === "ineligible" ? `<h3>Not applying</h3><p class="hint">This job is excluded for the reasons on the left. If one is wrong, say so in a note and Claude will recheck it.</p>` : `
+      <h3>What this application needs</h3>
+      <p class="progress">${r.missing ? `${r.missing} of ${r.total} still needed` : "Everything provided"}</p>
+      ${infoFields}
+      ${docChecks}
+      <div class="field">
+        <label for="cv-${id}">CV version to send</label>
+        <select id="cv-${id}" data-cv="${id}">${CV_VERSIONS.map(v => `<option ${v === r.cvChoice ? "selected" : ""}>${v}</option>`).join("")}</select>
+        <small>Your Google Drive CV variants. Suggested from the role type.</small>
+      </div>
+      ${cover}`}
+      <div class="field">
+        <label for="n-${id}">Notes for Claude</label>
+        <textarea id="n-${id}" data-notes="${id}" placeholder="Answers to screening questions, things to mention, or why to skip">${esc(t.notes || "")}</textarea>
+      </div>
+      <div class="actions">
+        ${job.eligibility !== "ineligible" && !applied ? `<button class="btn primary" data-ready="${id}" ${r.missing ? "disabled" : ""}>${s === "ready" ? "Ready ✓" : "Ready to apply"}</button>` : ""}
+        ${!applied && s !== "ignored" ? `<button class="btn" data-skip="${id}">Skip this job</button>` : ""}
+        ${s === "ignored" ? `<button class="btn" data-unskip="${id}">Restore</button>` : ""}
+        ${applied ? `<label class="progress" for="st-${id}">Status</label><select id="st-${id}" data-status="${id}">${DONE.map(x => `<option ${x === s ? "selected" : ""}>${x}</option>`).join("")}</select>` : ""}
+        <span class="saved" id="saved-${id}">${t.applied_at ? "Applied " + esc(t.applied_at.slice(0, 10)) : ""}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function listFor(view) {
+  const jobs = allJobs();
+  if (view === "today") return (state.run && state.run.picks || []).map(getJob)
+    .filter(j => j && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored");
+  if (view === "all") return jobs.filter(j => j.eligibility !== "ineligible" && !DONE.includes(statusOf(j.id))).sort(byRank);
+  if (view === "applied") return jobs.filter(j => DONE.includes(statusOf(j.id)))
+    .sort((a, b) => (track(b.id).applied_at || "").localeCompare(track(a.id).applied_at || ""));
+  if (view === "excluded") return jobs.filter(j => j.eligibility === "ineligible").sort((a, b) => (b.score || 0) - (a.score || 0));
+  return [];
+}
+
+function render() {
+  const today = listFor("today"), all = listFor("all"), applied = listFor("applied"), excluded = listFor("excluded");
+  const readyCount = allJobs().filter(j => statusOf(j.id) === "ready").length;
+  document.getElementById("s-picks").textContent = today.length;
+  document.getElementById("s-need").textContent = today.filter(j => statusOf(j.id) !== "ready" && requirements(j).missing).length;
+  document.getElementById("s-ready").textContent = readyCount;
+  document.getElementById("s-applied").textContent = applied.length;
+  for (const [k, list] of Object.entries({ today, all, applied, excluded }))
+    document.getElementById("n-" + k).textContent = list.length || "";
+  if (state.run) {
+    const r = state.run;
+    document.getElementById("runline").textContent =
+      `Last run ${r.date}: ${r.scraped ?? "?"} jobs scraped, ${r.new ?? "?"} new, ${r.eligible ?? "?"} eligible.` + (r.note ? " " + r.note : "");
+  }
+  document.getElementById("viewhint").textContent = HINTS[state.view];
+  for (const b of document.querySelectorAll("nav button")) b.setAttribute("aria-selected", String(b.dataset.view === state.view));
+
+  const view = document.getElementById("view");
+  if (state.view === "me") { view.innerHTML = profileHTML(); return; }
+  const list = listFor(state.view);
+  if (!list.length) {
+    const msg = state.run
+      ? { today: "Nothing left to apply to from today's picks.", all: "No ranked jobs yet.", applied: "No applications yet.", excluded: "Nothing excluded." }[state.view]
+      : "No jobs yet. The morning run fills this desk with ranked Hong Kong jobs and today's top 20.";
+    view.innerHTML = `<div class="empty"><h2>${esc(msg)}</h2><p>While you wait, fill in <a href="#" data-goto="me">My details</a> so applications start pre-filled.</p></div>`;
+    return;
+  }
+  view.innerHTML = `<div class="list">${list.map(rowHTML).join("")}</div>`;
+}
+
+function profileHTML() {
+  return `<form class="profile" id="profile-form" autocomplete="off">
+    ${PROFILE_FIELDS.map(f => `<div class="field ${f.wide ? "wide" : ""}">
+      <label for="p-${f.id}">${esc(f.label)}</label>
+      ${f.wide ? `<textarea id="p-${f.id}" data-profile="${f.id}">${esc(state.profile[f.id] || "")}</textarea>`
+               : `<input type="text" id="p-${f.id}" data-profile="${f.id}" value="${esc(state.profile[f.id] || "")}">`}
+      ${f.hint ? `<small>${esc(f.hint)}</small>` : ""}
+    </div>`).join("")}
+    <div class="saved wide" id="saved-profile"></div>
+  </form>`;
+}
+
+// ---- Writes: one at a time per document, coalesced while typing ----
+const pending = new Map();   // path -> { data, timer }
+const inflight = new Map();  // path -> promise
+function queueWrite(path, data, savedEl, delay = 700) {
+  const p = pending.get(path);
+  if (p) clearTimeout(p.timer);
+  const entry = { data, timer: setTimeout(() => flush(path, savedEl), delay) };
+  pending.set(path, entry);
+}
+async function flush(path, savedEl) {
+  const entry = pending.get(path);
+  if (!entry || !db) return;
+  pending.delete(path);
+  await inflight.get(path);
+  const run = db.doc(path).set(entry.data).then(() => {
+    const el = savedEl && document.getElementById(savedEl);
+    if (el) el.textContent = "Saved";
+  }).catch(e => showError(e));
+  inflight.set(path, run);
+  await run;
+}
+function showError(e) {
+  const b = document.getElementById("banner");
+  b.hidden = false;
+  b.textContent = e && e.code === "quota_exceeded" ? "The desk's storage is full. Old jobs need clearing; ask Claude to prune them."
+    : "Couldn't save that change. Check your connection and try again.";
+}
+function updateTracking(id, patch, immediate) {
+  const job = getJob(id);
+  const next = { ...track(id), ...patch, key: job ? job.key : track(id).key, updated_at: new Date().toISOString() };
+  state.tracking.set(id, next);
+  queueWrite("tracking/" + id, next, "saved-" + id, immediate ? 0 : 700);
+}
+function refreshSheet(id) {
+  const art = document.querySelector(`article[data-id="${id}"]`);
+  if (!art) return;
+  // Update the summary chips and progress without rebuilding inputs (keeps focus while typing).
+  const job = getJob(id); if (!job) return;
+  const r = requirements(job);
+  art.querySelector(".chips").innerHTML = pillFor(job) + `<span class="score">${job.rank_score != null ? job.rank_score.toFixed(1) : "–"}</span>`;
+  const prog = art.querySelector(".progress"); if (prog) prog.textContent = r.missing ? `${r.missing} of ${r.total} still needed` : "Everything provided";
+  const ready = art.querySelector("[data-ready]"); if (ready) ready.disabled = !!r.missing;
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button, a[data-goto]");
+  if (!t) return;
+  if (t.dataset.goto) { e.preventDefault(); state.view = t.dataset.goto; render(); return; }
+  if (t.dataset.view) { state.view = t.dataset.view; render(); return; }
+  if (t.dataset.toggle) { const id = t.dataset.toggle; state.open.has(id) ? state.open.delete(id) : state.open.add(id); render(); return; }
+  if (t.dataset.ready) {
+    const id = t.dataset.ready, job = getJob(id), r = requirements(job);
+    // Freeze the resolved answers so the application uses exactly what was shown.
+    const answers = Object.fromEntries(r.info.map(i => [i.label, i.value]));
+    updateTracking(id, { status: "ready", answers, cv_version: r.cvChoice, ready_at: new Date().toISOString() }, true);
+    render(); return;
+  }
+  if (t.dataset.skip) { updateTracking(t.dataset.skip, { status: "ignored" }, true); render(); return; }
+  if (t.dataset.unskip) { updateTracking(t.dataset.unskip, { status: "new" }, true); render(); return; }
+});
+document.addEventListener("input", e => {
+  const el = e.target, id = el.dataset.job || el.dataset.cover || el.dataset.notes;
+  if (el.dataset.profile) {
+    state.profile = { ...state.profile, [el.dataset.profile]: el.value };
+    queueWrite("profile/me", state.profile, "saved-profile");
+    const s = document.getElementById("saved-profile"); if (s) s.textContent = "Saving…";
+    return;
+  }
+  if (el.dataset.answer) {
+    const t = track(id);
+    updateTracking(id, { answers: { ...(t.answers || {}), [el.dataset.answer]: el.value }, ...(t.status === "ready" ? { status: "new" } : {}) });
+  } else if (el.dataset.cover) updateTracking(id, { cover_letter: el.value });
+  else if (el.dataset.notes) updateTracking(id, { notes: el.value });
+  else return;
+  refreshSheet(id);
+});
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.dataset.doc) { const t = track(el.dataset.job); updateTracking(el.dataset.job, { docs: { ...(t.docs || {}), [el.dataset.doc]: el.checked } }, true); refreshSheet(el.dataset.job); }
+  else if (el.dataset.draft) { updateTracking(el.dataset.draft, { draft_cover_letter: el.checked }, true); refreshSheet(el.dataset.draft); }
+  else if (el.dataset.cv) updateTracking(el.dataset.cv, { cv_version: el.value }, true);
+  else if (el.dataset.status) { updateTracking(el.dataset.status, { status: el.value }, true); render(); }
+});
+
+// Re-render from snapshots, but never while you're typing in the desk.
+let renderQueued = false;
+function scheduleRender() {
+  const a = document.activeElement;
+  if (a && a.closest && a.closest("#view") && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) {
+    if (!renderQueued) { renderQueued = true; a.addEventListener("blur", () => { renderQueued = false; render(); }, { once: true }); }
+    return;
+  }
+  render();
+}
+
+render();
+(async () => {
+  db = window.claude ? await window.claude.use("db") : null;
+  if (!db) {
+    const b = document.getElementById("banner"); b.hidden = false;
+    b.textContent = "Open this desk on claude.ai while signed in to see your jobs and save answers.";
+    return;
+  }
+  const onErr = e => showError(e);
+  db.collection("jobs").onSnapshot(snap => {
+    state.jobs = new Map(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }])); scheduleRender();
+  }, onErr);
+  db.collection("tracking").onSnapshot(snap => {
+    for (const ch of snap.docChanges()) {
+      if (ch.type === "removed") state.tracking.delete(ch.doc.id);
+      else if (!pending.has("tracking/" + ch.doc.id)) state.tracking.set(ch.doc.id, ch.doc.data());
+    }
+    scheduleRender();
+  }, onErr);
+  db.doc("profile/me").onSnapshot(snap => {
+    if (!pending.has("profile/me")) state.profile = snap.exists ? { ...snap.data() } : {};
+    scheduleRender();
+  }, onErr);
+  db.collection("runs").orderBy("at", "desc").limit(1).onSnapshot(snap => {
+    state.run = snap.empty ? null : snap.docs[0].data(); scheduleRender();
+  }, onErr);
+})();
+</script>

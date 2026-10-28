@@ -77,7 +77,8 @@ LATER_COLUMNS = {
     "rank_score": "REAL",               # NULL when ineligible
     "pick_date": "TEXT",                # last day this job was in the daily top picks
     "details_fetched_at": "TEXT",
-    "remote_version": "INTEGER",        # version of the dashboard's copy, for safe updates
+    "alt_urls": "TEXT",                 # JSON list: the same job found elsewhere (employer site, JobsDB)
+    "remote_exists": "INTEGER",         # 1 when the dashboard already has this job's document
 }
 
 # Scraped fields refreshed on every sighting. status/notes/first_seen are never overwritten.
@@ -218,7 +219,7 @@ def top_jobs(conn: sqlite3.Connection, min_score: int = 0, limit: int | None = N
     return conn.execute(sql, params).fetchall()
 
 
-_CSV_SKIP = {"description", "snippet", "dedupe_key", "first_run_id", "remote_version", "details_fetched_at"}
+_CSV_SKIP = {"description", "snippet", "dedupe_key", "first_run_id", "remote_exists", "details_fetched_at"}
 
 
 def export_csv(conn: sqlite3.Connection, path: Path, min_score: int = 0,
@@ -236,34 +237,27 @@ def export_csv(conn: sqlite3.Connection, path: Path, min_score: int = 0,
 
 # ---- Sync with the dashboard database -------------------------------------------------
 #
-# Dashboard collections: "jobs" is written only by the scraper; "tracking" only by you (on the
-# dashboard) and by the apply workflow. The scraper reads tracking but never writes it.
-# Both use doc_id(dedupe_key) as the document id.
+# Dashboard collections (document ids are doc_id(dedupe_key)):
+#   jobs/<id>      written once by the scraper after the job page is read, never edited, so
+#                  every job document stays at version 1 (which makes deletes safe without a read)
+#   runs/<stamp>   one new document per run: today's picks and every job's current rank,
+#                  eligibility and scores (the parts that change daily)
+#   tracking/<id>  your answers and status, written only by you and the apply workflow
+#   profile/me     your standing answers
 
-_REMOTE_FIELDS = ("title", "company", "location", "url", "apply_url", "apply_method", "source",
-                  "source_job_id", "posted", "salary", "category", "score", "matched", "eligibility",
-                  "reasons", "interview", "freshness", "rank_score", "pick_date", "documents",
-                  "info_needed", "languages", "years_required", "applicants", "seniority",
-                  "description", "first_seen", "last_seen", "details_fetched_at")
+_STATIC_FIELDS = ("title", "company", "location", "url", "apply_url", "apply_method", "source",
+                  "source_job_id", "posted", "salary", "snippet", "documents", "info_needed", "languages",
+                  "years_required", "applicants", "seniority", "description", "alt_urls", "first_seen",
+                  "details_fetched_at")
 _JSON_FIELDS = {"documents": [], "info_needed": [], "languages": {}, "reasons": []}
 _TRACKING_STATUS = {"interested": "interested", "ready": "ready", "applied": "applied",
                     "interviewing": "interviewing", "offer": "offer", "rejected": "rejected",
                     "skipped": "ignored", "ignored": "ignored"}
 
 
-def _read_doc(path: Path) -> tuple[str, dict, int | None]:
-    """Read one document file saved by an ArtifactData read with out_dir.
-
-    Accepts the bare document or an envelope with data/version keys."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(raw.get("data"), dict):
-        return raw.get("id") or path.stem, raw["data"], raw.get("version")
-    version = raw.get("version") or raw.get("__version__") or raw.get("_version")
-    return path.stem, raw, version
-
-
 def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
-    """Load the dashboard's jobs and tracking docs into this database.
+    """Load the dashboard's jobs and tracking docs (saved by an ArtifactData read with
+    out_dir) into this database.
 
     The scheduled scrape starts from an empty database, so this keeps each job's first_seen
     date, fetched details, and your status between runs."""
@@ -273,18 +267,19 @@ def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
         run_id = start_run(conn, ["import"])
         with conn:
             for path in sorted(jobs_dir.glob("*.json")):
-                _, d, version = _read_doc(path)
+                d = json.loads(path.read_text(encoding="utf-8"))
                 if not d.get("key"):
                     continue
-                values = {f: d.get(f) for f in _REMOTE_FIELDS}
-                for f, empty in _JSON_FIELDS.items():
-                    values[f] = json.dumps(values[f] if values[f] is not None else empty)
+                values = {f: d.get(f) for f in _STATIC_FIELDS}
+                for f in ("documents", "info_needed", "languages"):
+                    values[f] = json.dumps(values[f] if values[f] is not None else _JSON_FIELDS[f])
+                values["alt_urls"] = json.dumps(values["alt_urls"]) if values["alt_urls"] is not None else None
                 values.update(
-                    dedupe_key=d["key"], first_run_id=run_id, remote_version=version,
+                    dedupe_key=d["key"], first_run_id=run_id, remote_exists=1,
                     title=values["title"] or "", company=values["company"] or "",
                     source=values["source"] or "", source_job_id=values["source_job_id"] or "",
-                    score=values["score"] or 0,
-                    first_seen=values["first_seen"] or _now(), last_seen=values["last_seen"] or _now())
+                    first_seen=values["first_seen"] or _now(),
+                    last_seen=d.get("last_seen") or values["first_seen"] or _now())
                 cols = ", ".join(values)
                 conn.execute(f"INSERT OR REPLACE INTO jobs ({cols}) VALUES "
                              f"({', '.join(':' + c for c in values)})", values)
@@ -293,50 +288,76 @@ def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
         ids = {doc_id(r["dedupe_key"]): r["id"] for r in conn.execute("SELECT id, dedupe_key FROM jobs")}
         with conn:
             for path in sorted(tracking_dir.glob("*.json")):
-                did, d, _ = _read_doc(path)
+                d = json.loads(path.read_text(encoding="utf-8"))
                 status = _TRACKING_STATUS.get(d.get("status", ""))
-                if status and did in ids:
-                    conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, ids[did]))
+                if status and path.stem in ids:
+                    conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, ids[path.stem]))
                     n_tracking += 1
     return n_jobs, n_tracking
 
 
 def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: int = 20,
-                keep_days: int = 30, today: date | None = None) -> dict:
-    """Write one JSON file per dashboard job document, plus writes.json: the ArtifactData
-    "batch" calls to make (a list of batches, each a list of `writes` entries, max 50).
+                keep_days: int = 30, now: datetime | None = None, note: str = "") -> dict:
+    """Write the dashboard documents for this run, plus writes.json: the ArtifactData "batch"
+    calls to make (a list of batches, each a list of up to 50 `writes` entries).
 
-    Sends every ranked job, and ineligible jobs that otherwise fit well, so you can see why
-    they were excluded. Deletes the dashboard copy of jobs you never acted on that dropped
-    out, or weren't seen for keep_days."""
-    today = today or date.today()
-    cutoff = (today - timedelta(days=keep_days)).isoformat()
+    Creates job documents for newly read jobs that are ranked, or ineligible but otherwise a
+    good fit (so you can see why they were excluded); writes one runs/ document with every
+    shown job's current rank; deletes job documents you never acted on that dropped out or
+    weren't seen for keep_days."""
+    now = now or datetime.now()
+    cutoff = (now.date() - timedelta(days=keep_days)).isoformat()
     docs_dir = out_dir / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
-    writes, sent = [], 0
+    writes, ranks, created = [], {}, 0
     for r in conn.execute("SELECT * FROM jobs").fetchall():
         did = doc_id(r["dedupe_key"])
-        keep = r["rank_score"] is not None or (
-            r["eligibility"] == "ineligible" and r["score"] >= min_fit_for_excluded)
-        stale = r["last_seen"][:10] < cutoff and r["status"] == "new"
-        if stale or not keep:
-            if r["remote_version"] and r["status"] == "new":
-                writes.append({"op": "delete", "collection": "jobs", "doc_id": did,
-                               "if_version": r["remote_version"]})
+        keep = r["details_fetched_at"] is not None and (
+            r["rank_score"] is not None
+            or (r["eligibility"] == "ineligible" and r["score"] >= min_fit_for_excluded))
+        stale = r["last_seen"][:10] < cutoff
+        acted = r["status"] != "new"
+        if (stale or not keep) and not acted:
+            if r["remote_exists"]:
+                writes.append({"op": "delete", "collection": "jobs", "doc_id": did, "if_version": 1})
             continue
-        doc = {f: r[f] for f in _REMOTE_FIELDS}
-        doc["key"] = r["dedupe_key"]
-        for f, empty in _JSON_FIELDS.items():
-            doc[f] = json.loads(r[f]) if r[f] else empty
-        doc["description"] = (r["description"] or "")[:3000]
-        path = docs_dir / f"{did}.json"
-        path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
-        entry = {"op": "set", "collection": "jobs", "doc_id": did, "file_path": str(path.resolve())}
-        if r["remote_version"]:
-            entry["if_version"] = r["remote_version"]
-        writes.append(entry)
-        sent += 1
+        if not keep and not r["remote_exists"]:
+            continue
+        ranks[did] = {
+            "score": r["score"], "matched": r["matched"] or "", "category": r["category"] or "other",
+            "eligibility": r["eligibility"], "reasons": json.loads(r["reasons"] or "[]"),
+            "interview": r["interview"], "freshness": r["freshness"], "rank_score": r["rank_score"],
+            "last_seen": r["last_seen"],
+        }
+        if not r["remote_exists"]:
+            doc = {f: r[f] for f in _STATIC_FIELDS}
+            doc["key"] = r["dedupe_key"]
+            for f in ("documents", "info_needed", "languages"):
+                doc[f] = json.loads(r[f]) if r[f] else _JSON_FIELDS[f]
+            doc["alt_urls"] = json.loads(r["alt_urls"]) if r["alt_urls"] else []
+            doc["description"] = (r["description"] or "")[:3000]
+            path = docs_dir / f"{did}.json"
+            path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            writes.append({"op": "set", "collection": "jobs", "doc_id": did, "file_path": str(path.resolve())})
+            created += 1
+
+    pick_date = conn.execute("SELECT MAX(pick_date) FROM jobs").fetchone()[0]
+    picks = [doc_id(r["dedupe_key"]) for r in conn.execute(
+        "SELECT dedupe_key FROM jobs WHERE pick_date = ? ORDER BY rank_score DESC", (pick_date,))]
+    last = conn.execute("SELECT found, new FROM runs WHERE sources != 'import' "
+                        "ORDER BY id DESC LIMIT 1").fetchone()
+    stamp = now.strftime("%Y-%m-%dT%H%M%S")
+    run_doc = {
+        "at": now.isoformat(timespec="seconds"), "date": now.date().isoformat(),
+        "scraped": last["found"] if last else None, "new": last["new"] if last else None,
+        "eligible": sum(1 for v in ranks.values() if v["eligibility"] in ("eligible", "check")),
+        "picks": [p for p in picks if p in ranks], "ranks": ranks, "note": note,
+    }
+    run_path = docs_dir / f"run-{stamp}.json"
+    run_path.write_text(json.dumps(run_doc, ensure_ascii=False), encoding="utf-8")
+    # The run document goes last so the dashboard never shows ranks for jobs not yet written.
+    writes.append({"op": "set", "collection": "runs", "doc_id": stamp, "file_path": str(run_path.resolve())})
     batches = [writes[i:i + 50] for i in range(0, len(writes), 50)]
     (out_dir / "writes.json").write_text(json.dumps(batches, indent=1), encoding="utf-8")
-    return {"documents": sent, "deletes": sum(w["op"] == "delete" for w in writes),
-            "batches": len(batches)}
+    return {"new_job_documents": created, "deletes": sum(w["op"] == "delete" for w in writes),
+            "ranked": len(ranks), "picks": len(run_doc["picks"]), "batches": len(batches)}

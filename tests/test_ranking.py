@@ -126,32 +126,54 @@ def test_daily_picks_skip_applied_and_ineligible(tmp_path):
     assert [r["source_job_id"] for r in picks] == ["1"]
 
 
-def test_sync_round_trip_keeps_tracking_and_versions(tmp_path):
-    conn = make_db(tmp_path, [job("Associate Product Manager", "1"), job("Junior Business Analyst", "2")])
-    for i in (1, 2):
-        storage.save_details(conn, i, {"description": "Good English."})
+def test_sync_round_trip_keeps_tracking(tmp_path):
+    conn = make_db(tmp_path, [job("Associate Product Manager", "1"), job("Junior Business Analyst", "2"),
+                              job("Product Owner", "3", "Fluent Cantonese required.")])
+    for i in (1, 2, 3):
+        storage.save_details(conn, i, {"description": conn.execute(
+            "SELECT snippet FROM jobs WHERE id = ?", (i,)).fetchone()[0] or "Good English."})
     pipeline.rank_all(conn, PROFILE)
+    storage.pick_today(conn, 20)
     result = storage.export_sync(conn, tmp_path / "out")
-    assert result == {"documents": 2, "deletes": 0, "batches": 1}
+    assert result == {"new_job_documents": 3, "deletes": 0, "ranked": 3, "picks": 2, "batches": 1}
     batch = json.loads((tmp_path / "out" / "writes.json").read_text())[0]
-    assert all("if_version" not in w for w in batch)  # new documents
+    assert [w["collection"] for w in batch] == ["jobs", "jobs", "jobs", "runs"]  # run doc last
+    assert all("if_version" not in w for w in batch)
+    run = json.loads(Path(batch[-1]["file_path"]).read_text())
+    cantonese = storage.doc_id("product owner|example insurance")
+    assert run["ranks"][cantonese]["eligibility"] == "ineligible" and cantonese not in run["picks"]
 
-    # Simulate the dashboard: the saved docs come back with versions, and one job was applied to.
+    # Next morning: the dashboard's job docs come back as bare-field files; one job was applied to.
     state = tmp_path / "state"
     (state / "jobs").mkdir(parents=True)
     (state / "tracking").mkdir()
-    for w in batch:
-        doc = json.loads(Path(w["file_path"]).read_text())
-        (state / "jobs" / f"{w['doc_id']}.json").write_text(json.dumps({"id": w["doc_id"], "version": 3, "data": doc}))
+    for w in batch[:-1]:
+        (state / "jobs" / f"{w['doc_id']}.json").write_text(Path(w["file_path"]).read_text())
     applied_id = storage.doc_id("associate product manager|example insurance")
     (state / "tracking" / f"{applied_id}.json").write_text(json.dumps({"status": "applied"}))
 
     fresh = storage.connect(tmp_path / "fresh.db")
-    assert storage.import_state(fresh, state) == (2, 1)
+    assert storage.import_state(fresh, state) == (3, 1)
     row = fresh.execute("SELECT * FROM jobs WHERE source_job_id = '1'").fetchone()
-    assert row["status"] == "applied" and row["remote_version"] == 3 and row["category"] == "product"
+    assert row["status"] == "applied" and row["remote_exists"] == 1 and row["description"]
+    storage.rescore(fresh, lambda j: score_job(j, PROFILE["scoring"], PROFILE["categories"]))
+    pipeline.rank_all(fresh, PROFILE)
     assert [r["source_job_id"] for r in storage.pick_today(fresh, 20)] == ["2"]
 
-    storage.export_sync(fresh, tmp_path / "out2")
+    # Existing job documents are not rewritten; only the new run document is sent.
+    result = storage.export_sync(fresh, tmp_path / "out2")
+    assert result["new_job_documents"] == 0 and result["ranked"] == 3
     batch2 = json.loads((tmp_path / "out2" / "writes.json").read_text())[0]
-    assert {w["if_version"] for w in batch2} == {3}
+    assert [w["collection"] for w in batch2] == ["runs"]
+
+
+def test_sync_deletes_stale_untouched_jobs(tmp_path):
+    from datetime import datetime, timedelta
+    conn = make_db(tmp_path, [job("Junior Business Analyst", "2")])
+    conn.execute("UPDATE jobs SET remote_exists = 1, last_seen = '2026-01-01T00:00:00', details_fetched_at = 'x'")
+    conn.commit()
+    batch = None
+    storage.export_sync(conn, tmp_path / "out", now=datetime(2026, 10, 28))
+    batch = json.loads((tmp_path / "out" / "writes.json").read_text())[0]
+    assert batch[0] == {"op": "delete", "collection": "jobs",
+                        "doc_id": storage.doc_id("junior business analyst|example insurance"), "if_version": 1}

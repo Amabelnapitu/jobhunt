@@ -68,8 +68,12 @@ def fetch_details(job_id: str) -> dict:
 def parse_detail(html: str, job_id: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     desc = soup.select_one('[data-automation="jobAdDetails"]')
+    text = desc.get_text("\n", strip=True) if desc else ""
+    if not text:  # page layout changed: fall back to the schema.org data job pages carry
+        from ..enrich import parse_jsonld
+        text = parse_jsonld(html).get("description", "")
     return {
-        "description": desc.get_text("\n", strip=True) if desc else "",
+        "description": text,
         # JobsDB routes every application (Quick Apply or the employer's own form) through this page.
         "apply_url": APPLY_URL.format(id=job_id),
         "apply_method": "jobsdb",

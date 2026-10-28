@@ -9,12 +9,58 @@ The profile targets junior-level roles in this order of preference: **product ma
 enablement, data, actuarial and financial reporting, project roles). It also filters out HK
 construction and engineering "project manager" roles, which would otherwise flood the results.
 
+## Daily workflow
+
+1. **Every morning** a Claude scheduled task follows `.claude/skills/morning-run`: it scrapes,
+   reads each promising job's page, follows LinkedIn leads to the employer's site and JobsDB,
+   ranks everything, and picks today's top 20 jobs not yet applied to.
+2. **The dashboard** ([HK Job Desk](https://claude.ai/artifact/DvVMwRvqcSDEpBjgEiJRXT), private)
+   shows the picks, why each ranks where it does, and what each application needs: documents,
+   salary/notice details, cover letter. Fill those in and press *Ready to apply*.
+3. **Applying**: in the Claude app, say "apply to my ready jobs". Claude follows
+   `.claude/skills/apply-jobs`: fills each form in your signed-in browser, shows you the filled
+   form, and submits only after your OK. It never invents answers and never applies twice.
+
+### Ranking
+
+Each job gets:
+
+- **Eligibility** from `[candidate]` in `profile.toml`: `ineligible` if it requires Cantonese,
+  written Chinese, fluent Mandarin, HK permanent residency, or 3+ years' experience; `check` for
+  2 years (a stretch) or unclear language asks; otherwise `eligible`.
+- **Interview odds** (0-100): experience fit, junior/senior title, how many profile keywords
+  match, LinkedIn applicant count, rare languages the posting wants (Korean, Bahasa), Chinese
+  languages only "preferred", recruitment agency, insurance/actuarial domain.
+- **Freshness** (0-100): newest postings first.
+- **Rank** = 40% fit + 35% interview odds + 25% freshness (weights in `[ranking]`).
+  Ineligible jobs aren't ranked; `check` jobs are discounted 15%.
+
+Each job also records its **application link**, how you apply (JobsDB, employer site, LinkedIn
+Easy Apply) and the **documents and details the posting asks for**.
+
+### Dashboard database
+
+| Collection     | Written by           | Holds |
+|----------------|----------------------|-------|
+| `jobs/<id>`    | morning run, once    | job details, description, apply link, documents and info needed |
+| `runs/<stamp>` | morning run          | that run's picks, and every job's rank, eligibility and scores |
+| `tracking/<id>`| you, apply workflow  | your answers, documents ticked, cover letter, status, applied date |
+| `profile/me`   | you                  | standing answers (expected salary, availability, ...) |
+
+The page source is in `dashboard/index.html`.
+
 ## Sources
 
 | Source   | How                                             |
 |----------|-------------------------------------------------|
-| JobsDB   | The JSON search endpoint the JobsDB site calls  |
-| LinkedIn | The public (logged-out) job search; no login    |
+| JobsDB   | The JSON search endpoint the JobsDB site calls, plus each job's page |
+| LinkedIn | The public (logged-out) job search and job pages; no login |
+| Employer careers sites | Followed from LinkedIn's apply links: Greenhouse and Lever public APIs, or the page's schema.org JobPosting data |
+
+LinkedIn jobs with a short description or Easy Apply only are also looked up on JobsDB (same
+title and company), which often has the full text and a way to apply without LinkedIn. When a
+site rate-limits, the scraper stops asking it for the rest of the run; it never works around
+blocks.
 
 ## Run it
 
