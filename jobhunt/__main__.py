@@ -58,6 +58,7 @@ def scrape(args, conn) -> None:
     if not args.no_details:
         pipeline.fetch_details(conn, profile)
         enrich.enrich(conn, profile.get("ranking", {}).get("max_enrich_per_run", 40))
+        storage.rescore(conn, lambda j: score_job(j, scoring, categories))  # with full descriptions
     pipeline.rank_all(conn, profile)
     picks = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20))
     exported = storage.export_csv(conn, args.out, args.min_score)
@@ -79,6 +80,21 @@ def mark(args, conn) -> None:
     if not storage.set_status(conn, args.id, args.status, args.notes):
         sys.exit(f"No job with id {args.id}")
     print(f"Job {args.id} -> {args.status}")
+
+
+def rank_cmd(args, conn) -> None:
+    profile = load_profile(args.profile)
+    scoring, categories = profile.get("scoring", {}), profile.get("categories", {})
+    storage.rescore(conn, lambda j: score_job(j, scoring, categories))
+    if not args.no_details:
+        pipeline.fetch_details(conn, profile)
+        enrich.enrich(conn, profile.get("ranking", {}).get("max_enrich_per_run", 40))
+        storage.rescore(conn, lambda j: score_job(j, scoring, categories))
+    pipeline.rank_all(conn, profile)
+    rows = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20))
+    print(pipeline.summary(conn))
+    for r in rows:
+        print(pipeline.describe(r))
 
 
 def picks(args, conn) -> None:
@@ -135,6 +151,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("status", choices=storage.STATUSES)
     p.add_argument("--notes")
     p.set_defaults(func=mark)
+
+    p = sub.add_parser("rank", parents=[common], help="re-rank stored jobs without searching again")
+    p.add_argument("--profile", type=Path, default=Path("profile.toml"))
+    p.add_argument("--no-details", action="store_true", help="skip job pages and lookups")
+    p.set_defaults(func=rank_cmd)
 
     p = sub.add_parser("picks", parents=[common], help="show the latest daily top picks")
     p.set_defaults(func=picks)

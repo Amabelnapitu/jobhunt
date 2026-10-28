@@ -41,6 +41,11 @@ def score_job(job: Job, scoring: dict, categories: dict[str, list[str]] | None =
             total += weight
             hits.append(f"-{kw}")
 
+    for kw, weight in scoring.get("context_penalties", {}).items():
+        if _has(title, kw) or _has(body, kw):
+            total += weight
+            hits.append(f"-{kw}")
+
     for kw, weight in scoring.get("level_bonus", {}).items():
         if _has(title, kw):
             total += weight

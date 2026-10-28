@@ -145,9 +145,10 @@ def save_jobs(conn: sqlite3.Connection, run_id: int, jobs: list[Job],
 
 
 def job_from_row(r: sqlite3.Row) -> Job:
+    """Rebuild a Job for scoring; the full description, once read, stands in for the snippet."""
     return Job(source=r["source"], job_id=r["source_job_id"], title=r["title"], company=r["company"],
                location=r["location"] or "", url=r["url"] or "", posted=r["posted"] or "",
-               salary=r["salary"] or "", snippet=r["snippet"] or "")
+               salary=r["salary"] or "", snippet=r["description"] or r["snippet"] or "")
 
 
 def rescore(conn: sqlite3.Connection, score) -> None:
@@ -160,11 +161,17 @@ def rescore(conn: sqlite3.Connection, score) -> None:
                          (job.score, job.matched, job.category, r["id"]))
 
 
-def needing_details(conn: sqlite3.Connection, min_score: int, limit: int) -> list[sqlite3.Row]:
-    return conn.execute(
+def needing_details(conn: sqlite3.Connection, min_score: int, limit: int,
+                    free_sources: tuple[str, ...] = ("jobsdb",)) -> list[sqlite3.Row]:
+    """Jobs whose details we haven't got yet, best first. `limit` caps only the sources that
+    cost a page request; free_sources (details from data we already have) are all included."""
+    rows = conn.execute(
         "SELECT * FROM jobs WHERE details_fetched_at IS NULL AND score >= ? AND status NOT IN "
-        f"({','.join('?' * len(DONE))}) ORDER BY score DESC, posted DESC LIMIT ?",
-        (min_score, *DONE, limit)).fetchall()
+        f"({','.join('?' * len(DONE))}) ORDER BY score DESC, posted DESC",
+        (min_score, *DONE)).fetchall()
+    free = [r for r in rows if r["source"] in free_sources]
+    paid = [r for r in rows if r["source"] not in free_sources][:limit]
+    return free + paid
 
 
 def save_details(conn: sqlite3.Connection, job_id: int, details: dict) -> None:

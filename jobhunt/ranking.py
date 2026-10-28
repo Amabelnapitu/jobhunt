@@ -56,7 +56,8 @@ def eligibility(a: Analysis, title: str, candidate: dict, has_description: bool)
     if _words(title) & {"director", "head", "chief", "vp"}:
         hard.append("Executive-level title")
     if not has_description:
-        soft.append("Description not fetched yet")
+        soft.append("Only a short summary is available: open the posting to confirm language "
+                    "and experience requirements")
 
     if hard:
         return INELIGIBLE, hard + soft

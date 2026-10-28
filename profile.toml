@@ -150,7 +150,25 @@ max_enrich_per_run = 40         # jobs looked up elsewhere (employer site, JobsD
 "interior" = -20
 "fitting out" = -20
 "quantity surveyor" = -20
-"architect" = -6
+"architect" = -12
+# Engineering and research roles: AI-heavy postings rank high on keywords, but they hire
+# engineers, not product/BA people.
+"engineer" = -15
+"engineering" = -8
+"developer" = -15
+"programmer" = -15
+"scientist" = -10
+"researcher" = -8
+# In HK retail/FMCG/pharma, "Assistant Product Manager" is usually brand marketing.
+"beauty" = -12
+"body care" = -12
+"cosmetics" = -12
+"skincare" = -12
+"fashion" = -12
+"fmcg" = -12
+"merchandiser" = -12
+"merchandising" = -12
+"buyer" = -10
 "intern" = -6
 "internship" = -6
 "sales" = -6
@@ -158,6 +176,20 @@ max_enrich_per_run = 40         # jobs looked up elsewhere (employer site, JobsD
 "telemarketing" = -20
 
 # Bonus for titles at the level you're targeting.
+# Words anywhere in the posting (title, summary or description) that point to consumer-brand
+# product marketing rather than digital/tech product work. Counted once each.
+[scoring.context_penalties]
+"brand building" = -6
+"brand management" = -6
+"merchandising" = -6
+"product sourcing" = -6
+"consumer products" = -4
+"fmcg" = -6
+"health supplements" = -6
+"cosmetic" = -6
+"skincare" = -6
+"retail stores" = -4
+
 [scoring.level_bonus]
 "junior" = 5
 "associate" = 5

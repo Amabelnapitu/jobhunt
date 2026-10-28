@@ -10,6 +10,7 @@ from .ranking import rank
 from .sources import DETAILS
 
 _DOMAIN_WORDS = ("insurance", "insurer", "actuarial", "ifrs 17", "reinsurance", "life assurance")
+FULL_DESCRIPTION = 400  # characters; shorter is a summary that may omit requirements
 
 
 def fetch_details(conn, profile: dict) -> int:
@@ -26,7 +27,7 @@ def fetch_details(conn, profile: dict) -> int:
         details["apply_url"] = details.get("apply_url") or r["url"]
         storage.save_details(conn, r["id"], details)
         done += 1
-    print(f"[details] opened {done} of {len(rows)} job pages", file=sys.stderr)
+    print(f"[details] got details for {done} of {len(rows)} jobs", file=sys.stderr)
     return done
 
 
@@ -39,7 +40,7 @@ def rank_all(conn, profile: dict, today: date | None = None) -> None:
         ranked = rank(
             fit_score=r["score"], a=a, title=r["title"], matched=(r["matched"] or "").split(", "),
             posted=r["posted"] or "", applicants=r["applicants"], candidate=candidate, weights=weights,
-            has_description=bool(r["description"]), domain_hit=any(w in haystack for w in _DOMAIN_WORDS),
+            has_description=len(r["description"] or "") >= FULL_DESCRIPTION, domain_hit=any(w in haystack for w in _DOMAIN_WORDS),
             today=today)
         storage.save_ranking(conn, r["id"], {
             "documents": a.documents, "info_needed": a.info_needed, "languages": a.languages,
