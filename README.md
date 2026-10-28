@@ -25,7 +25,14 @@ construction and engineering "project manager" roles, which would otherwise floo
    name not found in your sources.
 4. **Saved & earlier, tracker**: jobs you save, and picks from earlier days, stay available after
    they drop out of the top 20. The tracker shows every application by stage, with dates.
-5. **Applying**: in the Claude app, say "apply to my ready jobs". Claude follows
+5. **One-click applying**: each tailored CV is printed to a PDF and checked to be exactly one A4
+   page (`python -m jobhunt cv-pdf`). On the dashboard, press **Apply** on a job you've
+   reviewed: that queues it. A scheduled task in the Claude desktop app on your computer runs
+   `.claude/skills/apply-jobs` every hour, submits queued applications in your signed-in
+   browser with the PDF attached, and marks them Applied. Anything it can't answer from your
+   CV, About me or saved answers (and any login, verification code or CAPTCHA) comes back as
+   **Needs you**. The older manual route still works: say "apply to my approved jobs".
+6. (Old step, kept for reference) In the Claude app, say "apply to my ready jobs". Claude follows
    `.claude/skills/apply-jobs`: fills each form in your signed-in browser, shows you the filled
    form, and submits only after your OK. It never invents answers and never applies twice.
 

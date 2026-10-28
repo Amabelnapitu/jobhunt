@@ -67,3 +67,16 @@ def test_header_must_not_change():
     t = tailor()
     t["header"]["lines"] = ["other@example.com"]
     assert "Header differs from the base CV" in cv.check(t, BASE, CORPUS)["problems"]
+
+
+def test_pdf_one_page_and_overflow(tmp_path):
+    import shutil
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node/Playwright not available")
+    from jobhunt import cv_pdf
+    assert cv_pdf.render(BASE, tmp_path / "short.pdf") == 1
+    long = copy.deepcopy(BASE)
+    long["sections"][1]["entries"][0]["bullets"] = ["A long bullet about analysis and delivery. " * 6] * 40
+    assert cv_pdf.render(long, tmp_path / "long.pdf") > 1
+    assert cv_pdf.filename(BASE, "Acme Bank (HK)", "Product Owner") == "Jane_Doe_CV_Acme_Bank_HK_Product_Owner.pdf"

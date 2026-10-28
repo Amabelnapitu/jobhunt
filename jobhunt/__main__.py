@@ -109,6 +109,16 @@ def cv_check(args) -> int:
     return 0 if result["ok"] else 1
 
 
+def cv_pdf(args) -> int:
+    from . import cv_pdf as pdf
+    worst = 1
+    for path in args.tailored:
+        result = pdf.render_tailored(path, args.out)
+        worst = max(worst, result["pages"])
+        print(f"{result['pages']} page(s)  {result['filename']}")
+    return 0 if worst == 1 else 1
+
+
 def picks(args, conn) -> None:
     rows = conn.execute("SELECT * FROM jobs WHERE pick_date = (SELECT MAX(pick_date) FROM jobs) "
                         "ORDER BY rank_score DESC").fetchall()
@@ -190,6 +200,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="base sections the tailored CV may leave out")
     p.set_defaults(func=None, cv=True)
 
+    p = sub.add_parser("cv-pdf", help="print tailored CVs to A4 PDFs and check each is one page")
+    p.add_argument("tailored", type=Path, nargs="+")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(func=None, pdf=True)
+
     p = sub.add_parser("export", parents=[common], help="write the database to CSV")
     p.add_argument("--out", type=Path, default=Path("output/jobs.csv"))
     p.add_argument("--min-score", type=int, default=0)
@@ -202,6 +217,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if getattr(args, "cv", False):
         return cv_check(args)
+    if getattr(args, "pdf", False):
+        return cv_pdf(args)
 
     conn = storage.connect(args.db)
     try:

@@ -259,7 +259,8 @@ _STATIC_FIELDS = ("title", "company", "location", "url", "apply_url", "apply_met
                   "years_required", "applicants", "seniority", "description", "alt_urls", "first_seen",
                   "details_fetched_at")
 _JSON_FIELDS = {"documents": [], "info_needed": [], "languages": {}, "reasons": []}
-_TRACKING_STATUS = {"interested": "interested", "ready": "ready", "applied": "applied",
+_TRACKING_STATUS = {"interested": "interested", "ready": "ready", "queued": "ready",
+                    "needs_input": "interested", "applied": "applied",
                     "interviewing": "interviewing", "offer": "offer", "rejected": "rejected",
                     "skipped": "ignored", "ignored": "ignored"}
 

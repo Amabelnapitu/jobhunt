@@ -127,7 +127,7 @@ textarea { min-height: 72px; resize: vertical }
 .checks.bad { background: var(--red-soft); color: var(--red) }
 
 /* Tracker */
-.board { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px }
+.board { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px }
 .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 150px }
 .col h3 { display: flex; justify-content: space-between }
 .card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; background: var(--bg); font-size: .88rem }
@@ -159,7 +159,7 @@ textarea { min-height: 72px; resize: vertical }
   <div class="stats" aria-live="polite">
     <div class="stat"><b id="s-picks">0</b><span>Today's picks</span></div>
     <div class="stat"><b id="s-need">0</b><span>Need your input</span></div>
-    <div class="stat"><b id="s-ready">0</b><span>Ready to apply</span></div>
+    <div class="stat"><b id="s-ready">0</b><span>Applying</span></div>
     <div class="stat"><b id="s-applied">0</b><span>Applied</span></div>
   </div>
 
@@ -181,8 +181,8 @@ textarea { min-height: 72px; resize: vertical }
     <strong>How applying works</strong>
     <ol>
       <li>Each morning the scraper ranks new jobs, picks today's top 20 you haven't applied to, and tailors your CV for each.</li>
-      <li>Open a job: check the tailored CV and why each change was made, fill in what the posting asks for, then press <em>Ready to apply</em>. No time today? Press <em>Save for later</em>; it stays under <em>Saved &amp; earlier</em> even if it drops out of the top 20.</li>
-      <li>In the Claude app, say <em>"apply to my ready jobs"</em>. Claude fills each application in your browser, shows you the filled form, and submits only after your OK. Nothing is invented: anything missing comes back to you as a question.</li>
+      <li>Open a job: check the tailored CV (and its one-page PDF), see why each change was made, fill in what the posting asks for, then press <em>Apply</em>. That is your approval. No time today? Press <em>Save for later</em>; it stays under <em>Saved &amp; earlier</em> even if it drops out of the top 20.</li>
+      <li>The worker on your computer (an hourly Claude task in the desktop app, using your signed-in browser) submits approved applications with the PDF attached and marks them Applied. It never invents an answer: a question it can't answer from your CV, About me or your answers comes back here as <em>Needs you</em>. Logins, verification codes and CAPTCHAs also come back to you.</li>
     </ol>
   </section>
 </div>
@@ -198,6 +198,7 @@ const PROFILE_FIELDS = [
   { id: "phone", label: "Phone for applications", hint: "" },
   { id: "email", label: "Email for applications", hint: "" },
   { id: "notes", label: "Anything Claude should always know when applying", hint: "Preferences, things to never claim, wording you like", wide: true },
+  { id: "allow_easy_apply", label: "Let the worker submit LinkedIn Easy Apply jobs", hint: "LinkedIn restricts automated activity and can limit accounts. Off: those jobs come back to you to submit.", check: true },
 ];
 const INFO_TO_PROFILE = {
   "Expected salary": "expected_salary", "Current salary": "current_salary",
@@ -209,13 +210,14 @@ const HINTS = {
   today: "Today's top picks you haven't applied to, best first. Rank mixes fit, interview odds and how recently it was posted.",
   earlier: "Jobs you saved, and picks from earlier days you haven't applied to or skipped. They stay here even after they drop out of the top 20.",
   all: "Every eligible or borderline job from recent runs, best first.",
-  tracker: "Every application you've started, by stage. Move a card with its menu; each move is dated.",
+  tracker: "Every application you've started, by stage. Applying = approved and waiting for the worker on your computer. Needs you = it hit a question only you can answer.",
   excluded: "Jobs that fit your profile but that you can't apply to, with the reason.",
   about: "What Claude may use to tailor your CV, besides your CVs: add your work, projects and achievements in your own words. Standing answers fill in application forms.",
 };
 const STAGES = [
-  { id: "interested", label: "Saved" }, { id: "ready", label: "Ready" }, { id: "applied", label: "Applied" },
-  { id: "interviewing", label: "Interviewing" }, { id: "offer", label: "Offer" }, { id: "rejected", label: "Rejected" },
+  { id: "interested", label: "Saved" }, { id: "queued", label: "Applying" }, { id: "needs_input", label: "Needs you" },
+  { id: "applied", label: "Applied" }, { id: "interviewing", label: "Interviewing" }, { id: "offer", label: "Offer" },
+  { id: "rejected", label: "Rejected" },
 ];
 const DONE = ["applied", "interviewing", "offer", "rejected"];
 
@@ -225,7 +227,8 @@ let db = null;
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function track(id) { return state.tracking.get(id) || {}; }
-function statusOf(id) { return track(id).status || "new"; }
+// "ready" is the older name for an approved application.
+function statusOf(id) { const s = track(id).status || "new"; return s === "ready" ? "queued" : s; }
 function getJob(id) {
   const job = state.jobs.get(id), r = state.run && state.run.ranks ? state.run.ranks[id] : null;
   return job && r ? { ...job, ...r, id } : null;
@@ -238,6 +241,7 @@ function daysAgo(iso) {
 }
 const byRank = (a, b) => (b.rank_score ?? -1) - (a.rank_score ?? -1);
 const todayPicks = () => new Set(state.run && state.run.picks || []);
+const picksToday = j => todayPicks().has(j.id) && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored";
 
 function requirements(job) {
   const t = track(job.id);
@@ -252,15 +256,18 @@ function requirements(job) {
   const coverOk = !coverNeeded || !!(t.cover_letter || "").trim() || !!t.draft_cover_letter;
   const tl = state.tailored.get(job.id);
   const cvChoice = t.cv_version || (tl ? "Tailored (" + tl.base + ")" : CV_FOR[job.category] || "PM");
+  const questions = (t.questions || []).map(q => ({ ...q, value: answers[q.q] || "" }));
   const missing = info.filter(i => !i.value.trim()).length
-    + documents.filter(d => !d.ready && d.label !== "Cover letter").length + (coverOk ? 0 : 1);
-  return { info, documents, coverNeeded, coverOk, cvChoice, missing, total: info.length + documents.length };
+    + documents.filter(d => !d.ready && d.label !== "Cover letter").length + (coverOk ? 0 : 1)
+    + questions.filter(q => !q.value.trim()).length;
+  return { info, documents, coverNeeded, coverOk, cvChoice, questions, missing, total: info.length + documents.length + questions.length };
 }
 
 function pillFor(job) {
   const s = statusOf(job.id);
   if (DONE.includes(s)) return `<span class="pill p-applied">${esc(s)}</span>`;
-  if (s === "ready") return `<span class="pill p-ready">Ready</span>`;
+  if (s === "queued") return `<span class="pill p-ready">Applying</span>`;
+  if (s === "needs_input") return `<span class="pill p-check">Needs you</span>`;
   if (job.eligibility === "ineligible") return `<span class="pill p-ineligible">Not eligible</span>`;
   const r = requirements(job);
   const saved = s === "interested" ? `<span class="pill p-saved">Saved</span>` : "";
@@ -310,7 +317,7 @@ function sheetHTML(job) {
     </div>`).join("");
   const docChecks = r.documents.filter(d => d.label !== "Cover letter").map((d, k) => `<label class="check">
       <input type="checkbox" id="d-${id}-${k}" data-doc="${esc(d.label)}" data-job="${id}" ${d.ready ? "checked" : ""}>
-      <span>${esc(d.label)} ready${d.label === "CV / resume" ? " (the tailored CV below, saved as a file)" : ""}</span></label>`).join("");
+      <span>${esc(d.label)} ready${d.label === "CV / resume" ? (state.tailored.get(id) && state.tailored.get(id).pdf ? " (the tailored PDF below is attached automatically)" : " (the CV version chosen below)") : ""}</span></label>`).join("");
   const cover = r.coverNeeded ? `<div class="field">
       <label for="c-${id}">Cover letter</label>
       <textarea id="c-${id}" data-cover="${id}" placeholder="Paste your cover letter, or tick the box below">${esc(t.cover_letter || "")}</textarea>
@@ -335,6 +342,11 @@ function sheetHTML(job) {
       ${job.eligibility === "ineligible" ? `<h3>Not applying</h3><p class="hint">This job is excluded for the reasons on the left. If one is wrong, say so in a note and Claude will recheck it.</p>` : `
       <h3>What this application needs</h3>
       <p class="progress">${r.missing ? `${r.missing} of ${r.total} still needed` : "Everything provided"}</p>
+      ${r.questions.length ? `<div class="banner" style="background:var(--amber-soft);color:var(--amber)">The worker stopped on ${r.questions.length === 1 ? "a question" : r.questions.length + " questions"} only you can answer${t.worker_note ? ": " + esc(t.worker_note) : "."}</div>` : ""}
+      ${r.questions.map((q, k) => `<div class="field">
+        <label for="q-${id}-${k}">${esc(q.q)}</label>
+        <input type="text" id="q-${id}-${k}" data-answer="${esc(q.q)}" data-job="${id}" value="${esc(q.value)}">
+      </div>`).join("")}
       ${infoFields}
       ${docChecks}
       <div class="field">
@@ -349,12 +361,13 @@ function sheetHTML(job) {
       </div>
       ${timelineHTML(t)}
       <div class="actions">
-        ${job.eligibility !== "ineligible" && !applied ? `<button class="btn primary" data-ready="${id}" ${r.missing ? "disabled" : ""}>${s === "ready" ? "Ready ✓" : "Ready to apply"}</button>` : ""}
-        ${!applied && s !== "interested" && s !== "ready" ? `<button class="btn" data-save="${id}">Save for later</button>` : ""}
-        ${!applied && s !== "ignored" ? `<button class="btn" data-skip="${id}">Skip this job</button>` : ""}
+        ${job.eligibility !== "ineligible" && !applied && s !== "queued" ? `<button class="btn primary" data-ready="${id}" ${r.missing ? "disabled" : ""} title="Approves this application: the worker on your computer submits it">Apply</button>` : ""}
+        ${s === "queued" ? `<span class="progress">Approved ${esc(daysAgo(t.ready_at))}. Waiting for the worker on your computer.</span><button class="btn" data-cancel="${id}">Cancel</button>` : ""}
+        ${!applied && !["interested", "queued", "needs_input"].includes(s) ? `<button class="btn" data-save="${id}">Save for later</button>` : ""}
+        ${!applied && s !== "ignored" && s !== "queued" ? `<button class="btn" data-skip="${id}">Skip this job</button>` : ""}
         ${s === "ignored" ? `<button class="btn" data-unskip="${id}">Restore</button>` : ""}
         ${applied ? `<label class="progress" for="st-${id}">Stage</label><select id="st-${id}" data-status="${id}">${DONE.map(x => `<option value="${x}" ${x === s ? "selected" : ""}>${esc(STAGES.find(y => y.id === x).label)}</option>`).join("")}</select>` : ""}
-        <span class="saved" id="saved-${id}">${t.applied_at ? "Applied " + esc(t.applied_at.slice(0, 10)) : ""}</span>
+        <span class="saved" id="saved-${id}">${t.applied_at ? "Applied " + esc(t.applied_at.slice(0, 10)) + (t.apply_channel ? " via " + esc(t.apply_channel) : "") + (t.confirmation ? ". " + esc(t.confirmation) : "") : ""}</span>
       </div>
     </div>
     ${job.eligibility === "ineligible" ? "" : cvPanelHTML(job)}
@@ -420,7 +433,10 @@ function cvPanelHTML(job) {
       <p class="hint" id="fit-${job.id}"></p>
       ${tl.summary ? `<p>${esc(tl.summary)}</p>` : ""}
       ${changes || `<p class="hint">No changes from the ${esc(tl.base)} CV.</p>`}
-      <div class="actions"><button class="btn small" data-copycv="${job.id}">Copy CV text</button><span class="saved" id="copied-${job.id}"></span></div>
+      <div class="actions">
+        ${tl.pdf && tl.pdf.asset_id ? `<button class="btn small primary" data-pdf="${job.id}">Download PDF</button><a href="/_blob/${esc(tl.pdf.asset_id)}" target="_blank" rel="noopener">Open PDF</a>
+          <span class="progress">${tl.pdf.pages === 1 ? "PDF checked: exactly 1 A4 page" : esc(tl.pdf.pages) + " pages: needs trimming"}</span>` : ""}
+        <button class="btn small" data-copycv="${job.id}">Copy CV text</button><span class="saved" id="copied-${job.id}"></span></div>
     </div>
   </div>`;
 }
@@ -447,14 +463,15 @@ function listFor(view) {
   if (view === "today") return (state.run && state.run.picks || []).map(getJob)
     .filter(j => j && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored");
   if (view === "earlier") return jobs.filter(j => !picks.has(j.id) && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored"
-      && (statusOf(j.id) === "interested" || statusOf(j.id) === "ready" || j.last_picked))
+      && (["interested", "queued", "needs_input"].includes(statusOf(j.id)) || j.last_picked))
     .sort((a, b) => (statusOf(b.id) === "interested") - (statusOf(a.id) === "interested") || (b.last_picked || "").localeCompare(a.last_picked || "") || byRank(a, b));
   if (view === "all") return jobs.filter(j => j.eligibility !== "ineligible" && !DONE.includes(statusOf(j.id))).sort(byRank);
   if (view === "excluded") return jobs.filter(j => j.eligibility === "ineligible").sort((a, b) => (b.score || 0) - (a.score || 0));
   return [];
 }
 function trackedJobs() {
-  return [...state.tracking.entries()].filter(([, t]) => STAGES.some(s => s.id === t.status))
+  return [...state.tracking.entries()].map(([id, t]) => [id, { ...t, status: statusOf(id) }])
+    .filter(([, t]) => STAGES.some(s => s.id === t.status))
     .map(([id, t]) => ({ id, t, job: state.jobs.get(id) })).filter(x => x.job);
 }
 
@@ -462,8 +479,9 @@ function render() {
   const today = listFor("today"), earlier = listFor("earlier"), all = listFor("all"), excluded = listFor("excluded");
   const tracked = trackedJobs();
   document.getElementById("s-picks").textContent = today.length;
-  document.getElementById("s-need").textContent = today.filter(j => statusOf(j.id) !== "ready" && requirements(j).missing).length;
-  document.getElementById("s-ready").textContent = tracked.filter(x => x.t.status === "ready").length;
+  document.getElementById("s-need").textContent = allJobs().filter(j => statusOf(j.id) === "needs_input"
+    || (picksToday(j) && statusOf(j.id) !== "queued" && requirements(j).missing)).length;
+  document.getElementById("s-ready").textContent = tracked.filter(x => x.t.status === "queued").length;
   document.getElementById("s-applied").textContent = tracked.filter(x => DONE.includes(x.t.status)).length;
   for (const [k, n] of Object.entries({ today: today.length, earlier: earlier.length, all: all.length, excluded: excluded.length, tracker: tracked.length }))
     document.getElementById("n-" + k).textContent = n || "";
@@ -528,7 +546,8 @@ function aboutHTML() {
       <h2>Standing answers</h2>
       <p class="hint">Reused on every application form.</p>
       <form id="profile-form" autocomplete="off">
-      ${PROFILE_FIELDS.map(f => `<div class="field">
+      ${PROFILE_FIELDS.map(f => f.check ? `<label class="check"><input type="checkbox" id="p-${f.id}" data-profilecheck="${f.id}" ${state.profile[f.id] ? "checked" : ""}>
+        <span><b>${esc(f.label)}</b><br><small class="progress">${esc(f.hint)}</small></span></label>` : `<div class="field">
         <label for="p-${f.id}">${esc(f.label)}</label>
         ${f.wide ? `<textarea id="p-${f.id}" data-profile="${f.id}">${esc(state.profile[f.id] || "")}</textarea>`
                  : `<input type="text" id="p-${f.id}" data-profile="${f.id}" value="${esc(state.profile[f.id] || "")}">`}
@@ -600,8 +619,23 @@ document.addEventListener("click", e => {
   if (t.dataset.toggle) { const id = t.dataset.toggle; state.open.has(id) ? state.open.delete(id) : state.open.add(id); render(); return; }
   if (t.dataset.ready) {
     const id = t.dataset.ready, r = requirements(getJob(id));
-    updateTracking(id, { status: "ready", answers: Object.fromEntries(r.info.map(i => [i.label, i.value])), cv_version: r.cvChoice, ready_at: new Date().toISOString() }, true);
+    const answers = { ...(track(id).answers || {}), ...Object.fromEntries(r.info.map(i => [i.label, i.value])) };
+    updateTracking(id, { status: "queued", answers, cv_version: r.cvChoice, ready_at: new Date().toISOString(), questions: [], worker_note: "" }, true);
     render(); return;
+  }
+  if (t.dataset.cancel) { updateTracking(t.dataset.cancel, { status: "interested" }, true); render(); return; }
+  if (t.dataset.pdf) {
+    const tl = state.tailored.get(t.dataset.pdf), out = document.getElementById("copied-" + t.dataset.pdf);
+    (async () => {
+      try {
+        const dl = await window.claude.use("downloads");
+        if (!dl) throw { code: "unavailable" };
+        const blob = await (await fetch("/_blob/" + tl.pdf.asset_id)).blob();
+        await dl.save({ filename: tl.pdf.filename, data: blob });
+        out.textContent = "Saved";
+      } catch (err) { out.textContent = err && err.code === "declined" ? "" : "Download isn't available here; use Open PDF."; }
+    })();
+    return;
   }
   if (t.dataset.save) { updateTracking(t.dataset.save, { status: "interested" }, true); render(); return; }
   if (t.dataset.skip) { updateTracking(t.dataset.skip, { status: "ignored" }, true); render(); return; }
@@ -629,7 +663,8 @@ document.addEventListener("input", e => {
   }
   if (el.dataset.answer) {
     const t = track(id);
-    updateTracking(id, { answers: { ...(t.answers || {}), [el.dataset.answer]: el.value }, ...(t.status === "ready" ? { status: "interested" } : {}) });
+    const back = ["ready", "queued"].includes(t.status) ? { status: "interested" } : {};  // changed answers need a new Apply
+    updateTracking(id, { answers: { ...(t.answers || {}), [el.dataset.answer]: el.value }, ...back });
   } else if (el.dataset.cover) updateTracking(id, { cover_letter: el.value });
   else if (el.dataset.notes) updateTracking(id, { notes: el.value });
   else return;
@@ -637,6 +672,7 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", e => {
   const el = e.target;
+  if (el.dataset.profilecheck) { state.profile = { ...state.profile, [el.dataset.profilecheck]: el.checked }; queueWrite("profile/me", state.profile, "saved-profile", 0); return; }
   if (el.dataset.doc) { const t = track(el.dataset.job); updateTracking(el.dataset.job, { docs: { ...(t.docs || {}), [el.dataset.doc]: el.checked } }, true); refreshSheet(el.dataset.job); }
   else if (el.dataset.draft) { updateTracking(el.dataset.draft, { draft_cover_letter: el.checked }, true); refreshSheet(el.dataset.draft); }
   else if (el.dataset.cv) updateTracking(el.dataset.cv, { cv_version: el.value }, true);

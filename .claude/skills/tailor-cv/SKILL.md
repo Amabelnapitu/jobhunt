@@ -47,7 +47,11 @@ Dashboard: https://claude.ai/artifact/DvVMwRvqcSDEpBjgEiJRXT
 4. Check: `python -m jobhunt cv-check $W/tailored.json --base $W/base.json --sources $W/sources`.
    It writes `checks` into the file. Fix and re-run until `ok` is true. Never hand-edit `checks`.
    An unsourced term means rewrite it out, not add it to the sources.
-5. Save: `ArtifactData` `set` collection `tailored`, `doc_id` = the job id, `file_path`
+5. PDF: `python -m jobhunt cv-pdf $W/tailored.json --out $W/pdf`. It prints the PDF and records
+   `pdf.pages`; it must be exactly 1 (if not, trim and go back to step 4). Upload it:
+   `Artifact` publish with the dashboard `url`, `asset: true`, `file_path` = the PDF. Put the
+   returned id in the document as `pdf: {"filename", "pages", "asset_id"}` and drop `pdf.path`.
+6. Save: `ArtifactData` `set` collection `tailored`, `doc_id` = the job id, `file_path`
    `$W/tailored.json` (pin `if_version` if a tailored doc already exists).
-6. Tell the user in a line or two what you emphasised, and anything the job wants that their
+7. Tell the user in a line or two what you emphasised, and anything the job wants that their
    sources don't show.
