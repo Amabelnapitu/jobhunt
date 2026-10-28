@@ -67,14 +67,44 @@ def test_parse_linkedin_html():
     assert first.posted == "2026-10-25"
 
 
-def test_merge_keeps_first_seen_and_flags_new(tmp_path):
-    out = tmp_path / "jobs.csv"
-    old = make("Business Analyst")
-    old.first_seen = "2026-10-01"
-    storage.save(out, [old])
+def test_db_upsert_tracks_new_and_keeps_status(tmp_path):
+    conn = storage.connect(tmp_path / "jobs.db")
+    ba = score_job(make("Business Analyst"), SCORING)
+    run1 = storage.start_run(conn, ["t"])
+    new = storage.save_jobs(conn, run1, [ba], {ba.key: {"business analyst"}})
+    assert new == {ba.key}
 
-    again, fresh = make("Business Analyst"), make("Project Manager")
-    all_jobs, new = storage.merge(storage.load(out), [again, fresh])
-    assert {j.title for j in all_jobs} == {"Business Analyst", "Project Manager"}
-    assert new == [fresh]
-    assert again.first_seen == "2026-10-01"
+    job_id = conn.execute("SELECT id FROM jobs").fetchone()["id"]
+    assert storage.set_status(conn, job_id, "applied", "sent CV")
+
+    # Same job again (different query) plus a fresh one.
+    pm = score_job(make("Project Manager"), SCORING)
+    run2 = storage.start_run(conn, ["t"])
+    new = storage.save_jobs(conn, run2, [make("Business Analyst"), pm],
+                            {ba.key: {"insurance"}, pm.key: {"pm"}})
+    assert new == {pm.key}
+
+    row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    assert (row["status"], row["notes"]) == ("applied", "sent CV")
+    queries = {r[0] for r in conn.execute("SELECT query FROM job_queries WHERE job_id = ?", (job_id,))}
+    assert queries == {"business analyst", "insurance"}
+    assert [r["new"] for r in conn.execute("SELECT new FROM runs ORDER BY id")] == [1, 1]
+
+
+def test_rescore_and_export(tmp_path):
+    conn = storage.connect(tmp_path / "jobs.db")
+    jobs = [score_job(make("Actuarial Analyst"), SCORING), score_job(make("Site Engineer"), SCORING)]
+    storage.save_jobs(conn, storage.start_run(conn, ["t"]), jobs, {})
+    conn.execute("UPDATE jobs SET score = 0")
+    storage.rescore(conn, lambda j: score_job(j, SCORING))
+    assert storage.top_jobs(conn)[0]["title"] == "Actuarial Analyst"
+    assert storage.export_csv(conn, tmp_path / "out.csv") == 1  # site role scores < 0
+
+
+def test_invalid_status_rejected(tmp_path):
+    import sqlite3
+    import pytest
+    conn = storage.connect(tmp_path / "jobs.db")
+    storage.save_jobs(conn, storage.start_run(conn, ["t"]), [make("Analyst")], {})
+    with pytest.raises(sqlite3.IntegrityError):
+        storage.set_status(conn, 1, "bogus")

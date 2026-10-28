@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 output/
+data/
 # Keep personal documents out of this public repo.
 cv/
 *.pdf
