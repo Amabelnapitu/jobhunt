@@ -177,3 +177,19 @@ def test_sync_deletes_stale_untouched_jobs(tmp_path):
     batch = json.loads((tmp_path / "out" / "writes.json").read_text())[0]
     assert batch[0] == {"op": "delete", "collection": "jobs",
                         "doc_id": storage.doc_id("junior business analyst|example insurance"), "if_version": 1}
+
+
+def test_linkedin_offsite_apply_without_visible_url():
+    html = """<div class="show-more-less-html__markup">Role.</div>
+    <button data-modal="job-details-topcard-apply-modal">Apply
+      <icon data-svg-class-name="apply-button__offsite-apply-icon-svg"></icon></button>
+    <div class="contextual-sign-in-modal" data-impression-id="public_jobs_apply-link-offsite_contextual-sign-in-modal"></div>"""
+    d = linkedin.parse_detail(html)
+    assert d["apply_method"] == "external" and d["apply_url"] == ""
+
+
+def test_jobsdb_details_use_search_summary_without_a_request():
+    from jobhunt.sources import jobsdb
+    d = jobsdb.fetch_details("95539362", "Support GTM strategy. 2-3 years' experience.")
+    assert d["description"].startswith("Support GTM")
+    assert d["apply_url"] == "https://hk.jobsdb.com/job/95539362/apply"

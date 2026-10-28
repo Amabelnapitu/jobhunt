@@ -19,7 +19,7 @@ def fetch_details(conn, profile: dict) -> int:
     done = 0
     for r in rows:
         try:
-            details = DETAILS[r["source"]](r["source_job_id"])
+            details = DETAILS[r["source"]](r["source_job_id"], r["snippet"] or "")
         except Exception as exc:  # keep going; it will be retried next run
             print(f"[details] {r['title']!r}: FAILED ({exc})", file=sys.stderr)
             continue

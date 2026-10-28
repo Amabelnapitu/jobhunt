@@ -28,10 +28,14 @@ Work in a scratch folder (call it `$W`) for state and sync files; run commands f
    `git clone https://github.com/Amabelnapitu/jobhunt` (use the default branch). Then
    `pip install -r requirements.txt`.
 
-2. **Check the network.** `curl -sS -o /dev/null -w "%{http_code}" https://hk.jobsdb.com/`.
-   If it fails with a proxy 403 / CONNECT error, the environment's network policy blocks the job
-   boards: skip to step 6 with the note "Job boards blocked by this environment's network
+2. **Check the network.**
+   `curl -sS -o /dev/null -w "%{http_code}" "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=analyst&location=Hong%20Kong"`
+   Any HTTP code (200, 429, ...) means the network is open. Only a curl error such as
+   "CONNECT tunnel failed, response 403" means the environment's network policy blocks the job
+   boards: then skip to step 6 with the note "Job boards blocked by this environment's network
    settings; allow hk.jobsdb.com and www.linkedin.com", write only the run document, and stop.
+   (Don't test with JobsDB's web pages: they sit behind a bot check and answer 403 even when the
+   network is fine. The scraper uses JobsDB's search API, which works.)
 
 3. **Load yesterday's state from the dashboard.** With `ArtifactData`:
    - `list` collection `jobs`, `out_dir` = `$W/state`, `query.limit` 1000 (follow `next_cursor`

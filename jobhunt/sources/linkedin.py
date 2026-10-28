@@ -10,21 +10,17 @@ from ..http import get
 from ..models import Job
 
 SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-PAGE_SIZE = 25
 
 
 def search(query: str, location: str, days: int, max_pages: int) -> Iterator[Job]:
-    for page in range(max_pages):
-        params = {
-            "keywords": query,
-            "location": location,
-            "f_TPR": f"r{days * 86400}",
-            "start": page * PAGE_SIZE,
-        }
+    start = 0
+    for _ in range(max_pages):
+        params = {"keywords": query, "location": location, "f_TPR": f"r{days * 86400}", "start": start}
         jobs = parse_html(get(SEARCH_URL, params=params).text, query)
         yield from jobs
-        if len(jobs) < PAGE_SIZE:
+        if not jobs:  # page size varies (10 or 25); an empty page means the end
             break
+        start += len(jobs)
 
 
 def parse_html(html: str, query: str = "") -> list[Job]:
@@ -58,7 +54,7 @@ def parse_html(html: str, query: str = "") -> list[Job]:
 DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{id}"
 
 
-def fetch_details(job_id: str) -> dict:
+def fetch_details(job_id: str, snippet: str = "") -> dict:
     return parse_detail(get(DETAIL_URL.format(id=job_id)).text)
 
 
@@ -77,7 +73,11 @@ def parse_detail(html: str) -> dict:
         elif digits:                   # "37 applicants", "Over 200 applicants"
             details["applicants"] = int(digits.group(1).replace(",", ""))
 
-    # Off-site applications hide the employer's URL in a commented-out <code id="applyUrl">.
+    # Logged out, LinkedIn marks off-site applications but usually hides the employer's URL
+    # behind sign-in; clicking Apply while signed in goes there. Sometimes the URL is in a
+    # commented-out <code id="applyUrl">.
+    if "apply-link-offsite" in html or "offsite-apply-icon" in html:
+        details["apply_method"] = "external"
     code = soup.select_one("code#applyUrl")
     if code:
         found = re.search(r'"(https?://[^"]+)"', code.decode_contents())

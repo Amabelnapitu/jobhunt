@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 
 from . import storage
 from .http import get
-from .sources import jobsdb
+from .sources import jobsdb, linkedin
 
 _GREENHOUSE = re.compile(r"(?:boards|job-boards)\.greenhouse\.io/(?:embed/job_app\?for=)?([\w-]+)/jobs/(\d+)")
 _LEVER = re.compile(r"jobs\.lever\.co/([\w.-]+)/([0-9a-f-]{36})")
@@ -78,15 +78,26 @@ def same_job(title: str, company: str, other_title: str, other_company: str) -> 
 def find_on_jobsdb(title: str, company: str) -> tuple[str, dict] | None:
     for job in jobsdb.search(f"{title} {company}", "Hong Kong", days=31, max_pages=1):
         if same_job(title, company, job.title, job.company):
-            return job.url, jobsdb.fetch_details(job.job_id)
+            return job.url, jobsdb.fetch_details(job.job_id, job.snippet)
     return None
+
+
+def find_on_linkedin(title: str, company: str) -> tuple[str, dict] | None:
+    for job in linkedin.search(f"{title} {company}", "Hong Kong", days=31, max_pages=1):
+        if same_job(title, company, job.title, job.company):
+            return job.url, linkedin.fetch_details(job.job_id)
+    return None
+
+
+def _employer_url(r) -> str:
+    url = r["apply_url"] or ""
+    return url if r["apply_method"] == "external" and "linkedin.com" not in url else ""
 
 
 def needs_enrichment(r) -> bool:
     short = len(r["description"] or "") < MIN_GOOD_DESCRIPTION
     easy_apply = r["apply_method"] == "linkedin_easy_apply"
-    employer_page = r["apply_method"] == "external" and r["apply_url"]
-    return short or easy_apply or (employer_page and r["source"] == "linkedin")
+    return short or easy_apply or bool(_employer_url(r))
 
 
 def enrich(conn, limit: int = 40) -> int:
@@ -98,14 +109,29 @@ def enrich(conn, limit: int = 40) -> int:
     for r in rows:
         best = r["description"] or ""
         alt_urls, updates = [], {}
-        if r["apply_method"] == "external" and r["apply_url"]:
+        if employer := _employer_url(r):
             try:
-                found = from_employer_page(r["apply_url"])
+                found = from_employer_page(employer)
                 if len(found.get("description", "")) > len(best):
                     best = found["description"]
-                    alt_urls.append(r["apply_url"])
+                    alt_urls.append(employer)
             except Exception as exc:
                 print(f"[enrich] employer page for {r['title']!r}: {exc}", file=sys.stderr)
+        if r["source"] == "jobsdb" and len(best) < MIN_GOOD_DESCRIPTION:
+            # JobsDB gives only a summary; the same job on LinkedIn usually has the full text.
+            try:
+                hit = find_on_linkedin(r["title"], r["company"])
+                if hit:
+                    url, details = hit
+                    alt_urls.append(url)
+                    if len(details.get("description", "")) > len(best):
+                        best = details["description"]
+                    if details.get("applicants") is not None:
+                        updates["applicants"] = details["applicants"]
+                    if details.get("seniority"):
+                        updates["seniority"] = details["seniority"]
+            except Exception as exc:
+                print(f"[enrich] LinkedIn lookup for {r['title']!r}: {exc}", file=sys.stderr)
         if len(best) < MIN_GOOD_DESCRIPTION or r["apply_method"] == "linkedin_easy_apply":
             if r["source"] != "jobsdb":
                 try:

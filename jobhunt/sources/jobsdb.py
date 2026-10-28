@@ -2,8 +2,6 @@
 
 from collections.abc import Iterator
 
-from bs4 import BeautifulSoup
-
 from ..http import get
 from ..models import Job
 
@@ -22,11 +20,13 @@ def search(query: str, location: str, days: int, max_pages: int) -> Iterator[Job
             "sourcesystem": "houston",
             "locale": "en-HK",
             "keywords": query,
-            "where": "All Hong Kong SAR" if location.lower() == "hong kong" else location,
             "daterange": daterange,
             "page": page,
             "pageSize": PAGE_SIZE,
         }
+        # siteKey HK-Main already limits results to Hong Kong; only narrow further on request.
+        if location.lower() not in ("hong kong", "hong kong sar"):
+            params["where"] = location
         data = get(SEARCH_URL, params=params).json()
         items = data.get("data") or []
         for item in items:
@@ -61,20 +61,14 @@ def parse_item(item: dict, query: str = "") -> Job:
 APPLY_URL = "https://hk.jobsdb.com/job/{id}/apply"
 
 
-def fetch_details(job_id: str) -> dict:
-    return parse_detail(get(JOB_URL.format(id=job_id)).text, job_id)
-
-
-def parse_detail(html: str, job_id: str) -> dict:
-    soup = BeautifulSoup(html, "html.parser")
-    desc = soup.select_one('[data-automation="jobAdDetails"]')
-    text = desc.get_text("\n", strip=True) if desc else ""
-    if not text:  # page layout changed: fall back to the schema.org data job pages carry
-        from ..enrich import parse_jsonld
-        text = parse_jsonld(html).get("description", "")
+def fetch_details(job_id: str, snippet: str = "") -> dict:
+    """JobsDB job pages sit behind a bot check that automated requests don't get through
+    (and we don't try to). The search results already carry the teaser and key bullet points,
+    so those stand in for the description; enrich.py looks for the full text on LinkedIn."""
     return {
-        "description": text,
-        # JobsDB routes every application (Quick Apply or the employer's own form) through this page.
+        "description": snippet,
+        # JobsDB routes every application (Quick Apply or the employer's own form) through this
+        # page; it opens normally in your own browser.
         "apply_url": APPLY_URL.format(id=job_id),
         "apply_method": "jobsdb",
         "applicants": None,
