@@ -46,8 +46,10 @@ Dashboard: https://claude.ai/artifact/DvVMwRvqcSDEpBjgEiJRXT
    - Tell the user how many you'll do and in what order before starting.
 
 2. **Prepare each application** (one at a time):
-   - Read the CV version named in `tracking.cv_version` from Google Drive (search for
-     `CV_Putri Bintang Amabel Napitu_<version>`; ask if there's more than one match).
+   - CV: if `tracking.cv_version` starts with "Tailored", use `tailored/<id>` (the CV the user
+     reviewed on the dashboard) for facts and answers, and ask the user to upload that CV as a
+     file. Otherwise read the named CV version from Google Drive (search titles ending in
+     `_<version>`; ask if there's more than one match).
    - Cover letter: use `tracking.cover_letter` if present. If `draft_cover_letter` is true,
      write one using only facts from the CV, `profile/me`, and the tracking notes, matched to the
      job description. Show it, get approval or edits, then save the approved text to
