@@ -193,3 +193,13 @@ def test_jobsdb_details_use_search_summary_without_a_request():
     d = jobsdb.fetch_details("95539362", "Support GTM strategy. 2-3 years' experience.")
     assert d["description"].startswith("Support GTM")
     assert d["apply_url"] == "https://hk.jobsdb.com/job/95539362/apply"
+
+
+def test_picking_twice_a_day_replaces_picks(tmp_path):
+    conn = make_db(tmp_path, [job(f"Business Analyst {i}", str(i)) for i in range(5)])
+    for i in range(1, 6):
+        storage.save_details(conn, i, {"description": "Good English. " * 40})
+    pipeline.rank_all(conn, PROFILE)
+    storage.pick_today(conn, 3)
+    storage.pick_today(conn, 2)
+    assert conn.execute("SELECT COUNT(*) FROM jobs WHERE pick_date IS NOT NULL").fetchone()[0] == 2

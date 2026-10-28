@@ -200,6 +200,8 @@ def pick_today(conn: sqlite3.Connection, n: int, today: str | None = None) -> li
         f"({','.join('?' * len(DONE))}) ORDER BY rank_score DESC, posted DESC LIMIT ?",
         (*DONE, n)).fetchall()
     with conn:
+        # Picking again the same day replaces that day's picks.
+        conn.execute("UPDATE jobs SET pick_date = NULL WHERE pick_date = ?", (today,))
         conn.executemany("UPDATE jobs SET pick_date = ? WHERE id = ?", [(today, r["id"]) for r in rows])
     return rows
 
@@ -304,24 +306,32 @@ def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
 
 
 def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: int = 20,
-                keep_days: int = 30, now: datetime | None = None, note: str = "") -> dict:
+                keep_days: int = 30, now: datetime | None = None, note: str = "",
+                max_ranked: int = 150, max_excluded: int = 50) -> dict:
     """Write the dashboard documents for this run, plus writes.json: the ArtifactData "batch"
     calls to make (a list of batches, each a list of up to 50 `writes` entries).
 
-    Creates job documents for newly read jobs that are ranked, or ineligible but otherwise a
-    good fit (so you can see why they were excluded); writes one runs/ document with every
-    shown job's current rank; deletes job documents you never acted on that dropped out or
-    weren't seen for keep_days."""
+    Shows the max_ranked best-ranked jobs whose details were read, today's picks, jobs you
+    acted on, and the max_excluded best-fitting ineligible jobs (so you can see why they were
+    excluded). Creates job documents for the ones the dashboard doesn't have yet, writes one
+    runs/ document with every shown job's current rank, and deletes job documents you never
+    acted on that dropped out or weren't seen for keep_days."""
     now = now or datetime.now()
     cutoff = (now.date() - timedelta(days=keep_days)).isoformat()
     docs_dir = out_dir / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
     writes, ranks, created = [], {}, 0
+    pick_date = conn.execute("SELECT MAX(pick_date) FROM jobs").fetchone()[0]
+    shown = {r[0] for r in conn.execute(
+        "SELECT id FROM jobs WHERE details_fetched_at IS NOT NULL AND rank_score IS NOT NULL "
+        "ORDER BY rank_score DESC LIMIT ?", (max_ranked,))}
+    shown |= {r[0] for r in conn.execute(
+        "SELECT id FROM jobs WHERE details_fetched_at IS NOT NULL AND eligibility = 'ineligible' "
+        "AND score >= ? ORDER BY score DESC LIMIT ?", (min_fit_for_excluded, max_excluded))}
+    shown |= {r[0] for r in conn.execute("SELECT id FROM jobs WHERE pick_date = ?", (pick_date,))}
     for r in conn.execute("SELECT * FROM jobs").fetchall():
         did = doc_id(r["dedupe_key"])
-        keep = r["details_fetched_at"] is not None and (
-            r["rank_score"] is not None
-            or (r["eligibility"] == "ineligible" and r["score"] >= min_fit_for_excluded))
+        keep = r["id"] in shown
         stale = r["last_seen"][:10] < cutoff
         acted = r["status"] != "new"
         if (stale or not keep) and not acted:
@@ -348,7 +358,6 @@ def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: i
             writes.append({"op": "set", "collection": "jobs", "doc_id": did, "file_path": str(path.resolve())})
             created += 1
 
-    pick_date = conn.execute("SELECT MAX(pick_date) FROM jobs").fetchone()[0]
     picks = [doc_id(r["dedupe_key"]) for r in conn.execute(
         "SELECT dedupe_key FROM jobs WHERE pick_date = ? ORDER BY rank_score DESC", (pick_date,))]
     last = conn.execute("SELECT found, new FROM runs WHERE sources != 'import' "
