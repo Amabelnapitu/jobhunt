@@ -1,0 +1,93 @@
+# Search profile: what to search for and how to rank results.
+# Edit freely; no personal contact details belong here (this repo is public).
+
+[search]
+# Each query is sent to every source. Keep them short, like you'd type into a job board.
+queries = [
+  "assistant project manager",
+  "project manager insurance",
+  "project manager AI",
+  "product manager AI",
+  "generative AI",
+  "actuarial transformation",
+  "actuarial analyst",
+  "business analyst insurance",
+  "business analyst",
+  "regulatory reporting",
+  "IFRS 17",
+  "PMO",
+  "data analyst insurance",
+]
+location = "Hong Kong"
+days = 14            # only jobs posted within this many days (where the source supports it)
+max_pages = 3        # pages per query per source
+
+[scoring]
+# Whole-word/phrase matches, case-insensitive. Weight counts x2 if found in the title, x1 if only in the snippet.
+[scoring.keywords]
+"project manager" = 6
+"project management" = 4
+"pmo" = 5
+"programme" = 3
+"product manager" = 5
+"product owner" = 4
+"business analyst" = 5
+"genai" = 6
+"generative ai" = 6
+"llm" = 5
+"artificial intelligence" = 4
+"ai" = 3
+"machine learning" = 3
+"actuarial" = 6
+"insurance" = 4
+"life insurance" = 2
+"ifrs 17" = 5
+"hkrbc" = 5
+"rbc" = 2
+"regulatory" = 3
+"compliance" = 2
+"transformation" = 3
+"agile" = 2
+"scrum" = 2
+"python" = 2
+"sql" = 2
+"power bi" = 2
+"analytics" = 2
+"fintech" = 2
+"korean" = 3
+"bahasa" = 3
+
+# Titles containing these get a penalty: too senior for an APM step, or a different field
+# (HK has many construction/engineering "project manager" roles).
+[scoring.penalties]
+"director" = -8
+"head of" = -8
+"vice president" = -6
+"svp" = -6
+"chief" = -10
+"principal" = -4
+"construction" = -20
+"building" = -20
+"site" = -20
+"civil" = -20
+"m&e" = -20
+"e&m" = -20
+"electrical" = -20
+"mechanical" = -20
+"interior" = -20
+"fitting out" = -20
+"quantity surveyor" = -20
+"architect" = -6
+"intern" = -6
+"internship" = -6
+"sales" = -4
+"agent" = -4
+
+# Bonus for titles that match the level you're targeting.
+[scoring.level_bonus]
+"assistant" = 3
+"associate" = 3
+"analyst" = 2
+"junior" = 1
+"officer" = 1
+"senior" = 1
