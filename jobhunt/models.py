@@ -15,6 +15,7 @@ class Job:
     query: str = ""       # the search query that found it
     score: int = 0
     matched: str = ""     # keywords that contributed to the score
+    category: str = ""    # role family from [categories] in profile.toml
 
     @property
     def key(self) -> tuple[str, str]:

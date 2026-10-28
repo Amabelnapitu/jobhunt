@@ -108,3 +108,38 @@ def test_invalid_status_rejected(tmp_path):
     storage.save_jobs(conn, storage.start_run(conn, ["t"]), [make("Analyst")], {})
     with pytest.raises(sqlite3.IntegrityError):
         storage.set_status(conn, 1, "bogus")
+
+
+PROFILE = tomllib.loads((ROOT / "profile.toml").read_text())
+
+
+def rank(title, snippet=""):
+    return score_job(make(title, snippet=snippet), PROFILE["scoring"], PROFILE["categories"])
+
+
+def test_preference_order_product_then_ba_then_other():
+    apm = rank("Associate Product Manager")
+    ba = rank("Business Analyst")
+    data = rank("Data Analyst")
+    assert (apm.category, ba.category, data.category) == ("product", "business_analysis", "ai_data")
+    assert apm.score > ba.score > data.score
+
+
+def test_junior_beats_senior_for_same_role():
+    assert rank("Junior Product Manager").score > rank("Senior Product Manager").score
+
+
+def test_category_first_match_wins_and_defaults_to_other():
+    assert rank("Product Manager, Data Platform").category == "product"
+    assert rank("Product Actuary").category == "actuarial_finance"
+    assert rank("Receptionist").category == "other"
+
+
+def test_connect_adds_category_to_old_database(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript(storage.SCHEMA.replace("    category      TEXT,\n", ""))  # schema before categories
+    old.close()
+    conn = storage.connect(path)
+    assert "category" in {r["name"] for r in conn.execute("PRAGMA table_info(jobs)")}

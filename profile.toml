@@ -1,22 +1,37 @@
 # Search profile: what to search for and how to rank results.
 # Edit freely; no personal contact details belong here (this repo is public).
+#
+# Target: junior-level roles. Preference order: Product Management (especially AI / insurtech),
+# then Business Analyst, then anything else that fits: AI enablement, data, actuarial-adjacent,
+# project roles.
 
 [search]
 # Each query is sent to every source. Keep them short, like you'd type into a job board.
 queries = [
-  "assistant project manager",
-  "project manager insurance",
-  "project manager AI",
+  # Product (main preference)
+  "associate product manager",
+  "junior product manager",
   "product manager AI",
-  "generative AI",
-  "actuarial transformation",
-  "actuarial analyst",
-  "business analyst insurance",
+  "AI product",
+  "product analyst",
+  "product owner",
+  "product manager insurance",
+  "digital product insurance",
+  # Business analysis
   "business analyst",
-  "regulatory reporting",
-  "IFRS 17",
-  "PMO",
+  "junior business analyst",
+  "business analyst insurance",
+  "business analyst AI",
+  # Other good fits
+  "AI enablement",
+  "generative AI",
+  "LLM",
+  "knowledge management AI",
   "data analyst insurance",
+  "financial reporting analyst insurance",
+  "actuarial analyst",
+  "assistant project manager",
+  "graduate programme",
 ]
 location = "Hong Kong"
 days = 14            # only jobs posted within this many days (where the source supports it)
@@ -25,47 +40,78 @@ max_pages = 3        # pages per query per source
 [scoring]
 # Whole-word/phrase matches, case-insensitive. Weight counts x2 if found in the title, x1 if only in the snippet.
 [scoring.keywords]
-"project manager" = 6
-"project management" = 4
-"pmo" = 5
-"programme" = 3
-"product manager" = 5
-"product owner" = 4
-"business analyst" = 5
+# Role (preference order)
+"product manager" = 10
+"product owner" = 8
+"product analyst" = 8
+"product management" = 6
+"product specialist" = 4
+"digital product" = 4
+"business analyst" = 7
+"business analysis" = 4
+"systems analyst" = 3
+"project manager" = 4
+"project coordinator" = 3
+"pmo" = 3
+# What you've built at FWD: LLM wiki, knowledge graphs, vector DB, AI enablement
 "genai" = 6
 "generative ai" = 6
-"llm" = 5
+"llm" = 6
+"large language model" = 5
+"rag" = 4
+"knowledge graph" = 5
+"vector database" = 4
+"ai enablement" = 5
+"ai adoption" = 4
+"ai" = 4
 "artificial intelligence" = 4
-"ai" = 3
 "machine learning" = 3
-"actuarial" = 6
+"prompt" = 2
+"knowledge management" = 4
+"automation" = 2
+"digital transformation" = 3
+"transformation" = 2
+# Domain
+"actuarial" = 5
 "insurance" = 4
-"life insurance" = 2
-"ifrs 17" = 5
-"hkrbc" = 5
-"rbc" = 2
-"regulatory" = 3
-"compliance" = 2
-"transformation" = 3
+"insurtech" = 4
+"fintech" = 3
+"financial reporting" = 4
+"valuation" = 3
+"ifrs 17" = 4
+"hkrbc" = 4
+"regulatory" = 2
+# Ways of working and tools
 "agile" = 2
 "scrum" = 2
+"user stories" = 2
+"requirements" = 2
+"uat" = 2
+"jira" = 1
+"stakeholder" = 1
 "python" = 2
 "sql" = 2
 "power bi" = 2
 "analytics" = 2
-"fintech" = 2
+"dashboard" = 1
+# Languages
 "korean" = 3
 "bahasa" = 3
+"indonesian" = 3
 
-# Titles containing these get a penalty: too senior for an APM step, or a different field
+# Title words that make a role a poor fit: too senior for a junior move, or a different field
 # (HK has many construction/engineering "project manager" roles).
 [scoring.penalties]
-"director" = -8
-"head of" = -8
-"vice president" = -6
-"svp" = -6
-"chief" = -10
-"principal" = -4
+"director" = -15
+"head of" = -15
+"vice president" = -12
+"vp" = -12
+"svp" = -12
+"chief" = -20
+"principal" = -8
+"senior" = -10
+"sr" = -10
+"lead" = -6
 "construction" = -20
 "building" = -20
 "site" = -20
@@ -80,14 +126,36 @@ max_pages = 3        # pages per query per source
 "architect" = -6
 "intern" = -6
 "internship" = -6
-"sales" = -4
-"agent" = -4
+"sales" = -6
+"agent" = -6
+"telemarketing" = -20
 
-# Bonus for titles that match the level you're targeting.
+# Bonus for titles at the level you're targeting.
 [scoring.level_bonus]
-"assistant" = 3
-"associate" = 3
-"analyst" = 2
-"junior" = 1
+"junior" = 5
+"associate" = 5
+"assistant" = 4
+"graduate" = 3
+"entry level" = 3
+"analyst" = 3
+"trainee" = 2
 "officer" = 1
-"senior" = 1
+"specialist" = 1
+
+# Bonus by role family (see [categories]): this is where the preference order lives.
+[scoring.category_bonus]
+product = 8
+business_analysis = 4
+ai_data = 2
+
+# Role family, decided from the job title. The first category with a matching keyword wins,
+# so order matters. Used for filtering: `python -m jobhunt list --category product`.
+[categories]
+product = ["product manager", "product owner", "product analyst", "product management",
+           "product specialist", "digital product", "product lead"]
+business_analysis = ["business analyst", "business analysis", "systems analyst", "functional analyst",
+                     "business systems"]
+ai_data = ["genai", "generative ai", "llm", "ai", "artificial intelligence", "machine learning",
+           "data analyst", "data scientist", "data", "analytics", "knowledge management"]
+actuarial_finance = ["actuarial", "actuary", "valuation", "financial reporting", "ifrs", "finance"]
+project = ["project manager", "project coordinator", "project officer", "pmo", "programme"]

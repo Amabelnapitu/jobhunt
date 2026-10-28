@@ -3,6 +3,7 @@
     python -m jobhunt                          # scrape all sources (same as `scrape`)
     python -m jobhunt scrape --sources jobsdb  # one source
     python -m jobhunt list --status new        # show stored jobs
+    python -m jobhunt list --category product  # one role family
     python -m jobhunt mark 42 applied --notes "via referral"
     python -m jobhunt export                   # write output/jobs.csv for Excel
 """
@@ -24,7 +25,7 @@ def load_profile(path: Path) -> dict:
 
 def scrape(args, conn) -> None:
     profile = load_profile(args.profile)
-    search, scoring = profile["search"], profile.get("scoring", {})
+    search, scoring, categories = profile["search"], profile.get("scoring", {}), profile.get("categories", {})
     days = args.days or search.get("days", 14)
     max_pages = args.max_pages or search.get("max_pages", 3)
 
@@ -43,23 +44,23 @@ def scrape(args, conn) -> None:
             except Exception as exc:  # one broken source/query shouldn't kill the run
                 print(f"[{name}] {query!r}: FAILED ({exc})", file=sys.stderr)
 
-    jobs = [score_job(j, scoring) for j in found.values()]
+    jobs = [score_job(j, scoring, categories) for j in found.values()]
     new = storage.save_jobs(conn, run_id, jobs, queries)
     # Re-score older jobs too, so edits to profile.toml apply to them.
-    storage.rescore(conn, lambda j: score_job(j, scoring))
+    storage.rescore(conn, lambda j: score_job(j, scoring, categories))
     exported = storage.export_csv(conn, args.out, args.min_score)
 
     print(f"\n{len(jobs)} jobs this run, {len(new)} new. Database: {args.db}, CSV: {args.out} ({exported} rows)\n")
     this_run = sorted((j for j in jobs if j.score >= args.min_score), key=lambda j: -j.score)
     for job in this_run[: args.top]:
         flag = "NEW " if job.key in new else "    "
-        print(f"{flag}{job.score:>4}  {job.title[:60]:<60}  {job.company[:30]:<30}  {job.url}")
+        print(f"{flag}{job.score:>4}  {job.category:<17}  {job.title[:55]:<55}  {job.company[:28]:<28}  {job.url}")
 
 
 def list_jobs(args, conn) -> None:
     statuses = tuple(args.status) if args.status else storage.STATUSES
-    for r in storage.top_jobs(conn, args.min_score, args.top, statuses):
-        print(f"{r['id']:>5}  {r['score']:>4}  {r['status']:<12}  {r['title'][:55]:<55}  "
+    for r in storage.top_jobs(conn, args.min_score, args.top, statuses, tuple(args.category or ())):
+        print(f"{r['id']:>5}  {r['score']:>4}  {r['status']:<12}  {r['category'] or '':<17}  {r['title'][:50]:<50}  "
               f"{r['company'][:28]:<28}  {r['url']}")
 
 
@@ -70,7 +71,7 @@ def mark(args, conn) -> None:
 
 
 def export(args, conn) -> None:
-    n = storage.export_csv(conn, args.out, args.min_score)
+    n = storage.export_csv(conn, args.out, args.min_score, tuple(args.category or ()))
     print(f"Wrote {n} jobs to {args.out}")
 
 
@@ -93,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("list", parents=[common], help="show stored jobs, best first")
     p.add_argument("--status", nargs="+", choices=storage.STATUSES)
+    p.add_argument("--category", nargs="+", help="e.g. product business_analysis (see profile.toml)")
     p.add_argument("--min-score", type=int, default=0)
     p.add_argument("--top", type=int, default=50)
     p.set_defaults(func=list_jobs)
@@ -106,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("export", parents=[common], help="write the database to CSV")
     p.add_argument("--out", type=Path, default=Path("output/jobs.csv"))
     p.add_argument("--min-score", type=int, default=0)
+    p.add_argument("--category", nargs="+")
     p.set_defaults(func=export)
 
     argv = sys.argv[1:] if argv is None else argv
