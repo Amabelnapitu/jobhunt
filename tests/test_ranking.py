@@ -203,3 +203,57 @@ def test_picking_twice_a_day_replaces_picks(tmp_path):
     storage.pick_today(conn, 3)
     storage.pick_today(conn, 2)
     assert conn.execute("SELECT COUNT(*) FROM jobs WHERE pick_date IS NOT NULL").fetchone()[0] == 2
+
+
+def test_earlier_picks_survive_the_next_run(tmp_path):
+    """A job picked yesterday but not today stays on the dashboard, with its pick date."""
+    from datetime import datetime
+    conn = make_db(tmp_path, [job("Junior Business Analyst", "1"), job("Product Analyst", "2")])
+    for i in (1, 2):
+        storage.save_details(conn, i, {"description": "Good English. " * 40})
+    pipeline.rank_all(conn, PROFILE)
+    storage.pick_today(conn, 20, today="2026-10-27")
+    storage.export_sync(conn, tmp_path / "day1", now=datetime(2026, 10, 27, 7))
+    batch = json.loads((tmp_path / "day1" / "writes.json").read_text())[0]
+
+    state = tmp_path / "state"
+    for sub in ("jobs", "runs"):
+        (state / sub).mkdir(parents=True)
+    for w in batch:
+        (state / w["collection"] / f"{w['doc_id']}.json").write_text(Path(w["file_path"]).read_text())
+
+    fresh = storage.connect(tmp_path / "day2.db")
+    storage.import_state(fresh, state)
+    storage.rescore(fresh, lambda j: score_job(j, PROFILE["scoring"], PROFILE["categories"]))
+    pipeline.rank_all(fresh, PROFILE)
+    storage.pick_today(fresh, 1, today="2026-10-28")       # only one job makes today's picks
+    storage.export_sync(fresh, tmp_path / "day2", now=datetime(2026, 10, 28, 7))
+    run = json.loads(Path(json.loads((tmp_path / "day2" / "writes.json").read_text())[0][-1]["file_path"]).read_text())
+    assert len(run["picks"]) == 1 and len(run["ranks"]) == 2
+    dropped = next(v for k, v in run["ranks"].items() if k not in run["picks"])
+    assert dropped["last_picked"] == "2026-10-27"
+
+
+def test_live_posting_language_and_experience_cases():
+    """Wording from real postings that slipped through on the first live run."""
+    def status(text, title="Product Owner"):
+        return eligibility(analyze(text), title, CANDIDATE, True)
+    assert status("Professional proficiency in both English and Mandarin, in reading, writing, and daily "
+                  "communication (Cantonese is a plus)")[0] == INELIGIBLE
+    assert status("Bilingual Skills English and Mandarin.")[0] == INELIGIBLE
+    assert status("Bilingual English/Mandarin required to coordinate with overseas partners.")[0] == INELIGIBLE
+    assert status("Several years of relevant experience in market data management.")[0] == INELIGIBLE
+    assert status("Two or more years of experience in financial and tax product positions")[0] == CHECK
+    assert status("Must have a Software Engineering / Computer Science background, in order to work with "
+                  "engineers.") == (INELIGIBLE, ["Requires a computer science / software engineering background"])
+    assert status("Strong computer science fundamentals and system design skills.")[0] == CHECK
+
+
+def test_title_seniority_rules():
+    def status(title):
+        return eligibility(analyze("Good English."), title, CANDIDATE, True)[0]
+    assert status("Customer AI & Analytics Product, Principal (Senior Manager)") == INELIGIBLE
+    assert status("Manager, Data Science (Full-stack Insights)") == CHECK
+    assert status("Assistant AI & Data Management and Governance Manager") == ELIGIBLE
+    assert status("Product Manager - AI Finance App") == ELIGIBLE
+    assert status("AI Product Manager (Management Trainee)") == ELIGIBLE

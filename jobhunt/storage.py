@@ -293,6 +293,15 @@ def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
                 conn.execute(f"INSERT OR REPLACE INTO jobs ({cols}) VALUES "
                              f"({', '.join(':' + c for c in values)})", values)
                 n_jobs += 1
+    runs = sorted((state_dir / "runs").glob("*.json")) if (state_dir / "runs").is_dir() else []
+    if runs:
+        # The latest run remembers when each job was last picked, so earlier picks stay available.
+        ranks = json.loads(runs[-1].read_text(encoding="utf-8")).get("ranks", {})
+        ids = {doc_id(r["dedupe_key"]): r["id"] for r in conn.execute("SELECT id, dedupe_key FROM jobs")}
+        with conn:
+            for did, rank in ranks.items():
+                if rank.get("last_picked") and did in ids:
+                    conn.execute("UPDATE jobs SET pick_date = ? WHERE id = ?", (rank["last_picked"], ids[did]))
     if tracking_dir.is_dir():
         ids = {doc_id(r["dedupe_key"]): r["id"] for r in conn.execute("SELECT id, dedupe_key FROM jobs")}
         with conn:
@@ -328,7 +337,8 @@ def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: i
     shown |= {r[0] for r in conn.execute(
         "SELECT id FROM jobs WHERE details_fetched_at IS NOT NULL AND eligibility = 'ineligible' "
         "AND score >= ? ORDER BY score DESC LIMIT ?", (min_fit_for_excluded, max_excluded))}
-    shown |= {r[0] for r in conn.execute("SELECT id FROM jobs WHERE pick_date = ?", (pick_date,))}
+    # Picks from earlier days stay available (to apply to later) until keep_days pass.
+    shown |= {r[0] for r in conn.execute("SELECT id FROM jobs WHERE pick_date >= ?", (cutoff,))}
     for r in conn.execute("SELECT * FROM jobs").fetchall():
         did = doc_id(r["dedupe_key"])
         keep = r["id"] in shown
@@ -344,7 +354,7 @@ def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: i
             "score": r["score"], "matched": r["matched"] or "", "category": r["category"] or "other",
             "eligibility": r["eligibility"], "reasons": json.loads(r["reasons"] or "[]"),
             "interview": r["interview"], "freshness": r["freshness"], "rank_score": r["rank_score"],
-            "last_seen": r["last_seen"],
+            "last_seen": r["last_seen"], "last_picked": r["pick_date"],
         }
         if not r["remote_exists"]:
             doc = {f: r[f] for f in _STATIC_FIELDS}

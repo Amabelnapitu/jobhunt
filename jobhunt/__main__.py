@@ -12,6 +12,7 @@
 """
 
 import argparse
+import json
 import sys
 import tomllib
 from pathlib import Path
@@ -97,6 +98,17 @@ def rank_cmd(args, conn) -> None:
         print(pipeline.describe(r))
 
 
+def cv_check(args) -> int:
+    from . import cv
+    tailored = json.loads(args.tailored.read_text(encoding="utf-8"))
+    base = json.loads(args.base.read_text(encoding="utf-8"))
+    result = cv.check(tailored, base, cv.load_corpus(args.sources), tuple(args.droppable))
+    tailored["checks"] = result
+    args.tailored.write_text(json.dumps(tailored, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result["ok"] else 1
+
+
 def picks(args, conn) -> None:
     rows = conn.execute("SELECT * FROM jobs WHERE pick_date = (SELECT MAX(pick_date) FROM jobs) "
                         "ORDER BY rank_score DESC").fetchall()
@@ -170,6 +182,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--note", help="short message shown on the dashboard for this run")
     p.set_defaults(func=export_sync)
 
+    p = sub.add_parser("cv-check", help="check a tailored CV against its base and your sources")
+    p.add_argument("tailored", type=Path)
+    p.add_argument("--base", type=Path, required=True)
+    p.add_argument("--sources", type=Path, required=True, help="folder of CV/notes .json/.txt files")
+    p.add_argument("--droppable", nargs="*", default=["LEADERSHIP EXPERIENCE"],
+                   help="base sections the tailored CV may leave out")
+    p.set_defaults(func=None, cv=True)
+
     p = sub.add_parser("export", parents=[common], help="write the database to CSV")
     p.add_argument("--out", type=Path, default=Path("output/jobs.csv"))
     p.add_argument("--min-score", type=int, default=0)
@@ -180,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     if not argv or argv[0] not in sub.choices and argv[0] not in ("-h", "--help"):
         argv = ["scrape", *argv]
     args = parser.parse_args(argv)
+    if getattr(args, "cv", False):
+        return cv_check(args)
 
     conn = storage.connect(args.db)
     try:

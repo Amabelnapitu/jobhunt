@@ -41,6 +41,7 @@ max_pages = 3        # pages per query per source
 [candidate]
 work_rights = "IANG"            # Hong Kong IANG visa: no sponsorship needed
 permanent_resident = false
+cs_degree = false               # degrees: BSc Quantitative Finance, MSc Business Analytics
 # Experience: APM at FWD since June 2026 (contract ends Dec 2026), plus internships.
 max_years_qualified = 1         # postings asking for up to this many years: qualified
 max_years_stretch = 2           # up to this many: shown as a stretch ("check"); more: not eligible

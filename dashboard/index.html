@@ -1,33 +1,34 @@
 <title>HK Job Desk</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@500&family=Tinos:ital,wght@0,400;0,700;1,400&display=swap">
 <style>
-/* Layout: a working desk. Run summary strip on top, tabs, then a ranked queue of job rows that expand into an application sheet. */
+/* Layout: a working desk. Run summary strip, tabs, then a ranked queue of job rows that expand into an application sheet with the tailored CV beside its change log. */
 :root {
   --bg: #f3f6f5; --panel: #ffffff; --ink: #13201e; --muted: #5b6b68; --line: #d9e2df;
   --jade: #0d7a6b; --jade-soft: #dff1ec; --amber: #a86a12; --amber-soft: #fbeed6;
-  --red: #b23f37; --red-soft: #f8e1df; --focus: #0d7a6b;
+  --red: #b23f37; --red-soft: #f8e1df; --focus: #0d7a6b; --mark: #fff1b8; --paper: #ffffff; --paper-ink: #111111;
   --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --cv: "Times New Roman", Tinos, Times, serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0f1716; --panel: #172220; --ink: #e5eeec; --muted: #93a6a2; --line: #2a3a37;
   --jade: #4cc3ae; --jade-soft: #173832; --amber: #e3a44a; --amber-soft: #3a2c15;
-  --red: #ec7d73; --red-soft: #3d1f1c; --focus: #4cc3ae; color-scheme: dark } }
+  --red: #ec7d73; --red-soft: #3d1f1c; --focus: #4cc3ae; --mark: #fff1b8; --paper: #ffffff; --paper-ink: #111111; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0f1716; --panel: #172220; --ink: #e5eeec; --muted: #93a6a2; --line: #2a3a37;
   --jade: #4cc3ae; --jade-soft: #173832; --amber: #e3a44a; --amber-soft: #3a2c15;
-  --red: #ec7d73; --red-soft: #3d1f1c; --focus: #4cc3ae; color-scheme: dark }
+  --red: #ec7d73; --red-soft: #3d1f1c; --focus: #4cc3ae; --mark: #fff1b8; --paper: #ffffff; --paper-ink: #111111; color-scheme: dark }
 * { box-sizing: border-box }
 body { background: var(--bg); color: var(--ink); font: 400 15px/1.5 var(--body); }
-.wrap { max-width: 1080px; margin: 0 auto; padding-block: 24px 64px;
+.wrap { max-width: 1160px; margin: 0 auto; padding-block: 24px 64px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0 }
 h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em }
+h2 { font-size: 1.15rem; font-weight: 700 }
 .sub { color: var(--muted); margin: 4px 0 0 }
-header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line);
   border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 20px 0 }
 .stat { background: var(--panel); padding: 12px 14px }
@@ -56,11 +57,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .p-ineligible { background: var(--red-soft); color: var(--red) }
 .p-ready { background: var(--jade); color: var(--panel) }
 .p-applied { background: var(--ink); color: var(--panel) }
-.p-need { border: 1px solid var(--line); color: var(--muted) }
+.p-need, .p-saved, .p-earlier { border: 1px solid var(--line); color: var(--muted) }
 .score { font: 500 .8rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; min-width: 3.2rem; text-align: right }
 .sheet { border-top: 1px solid var(--line); padding: 16px 14px 18px; display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px }
-.sheet h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px }
+.sheet h3, .cvpanel h3, .tracker h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px }
 .bars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; font-size: .88rem; margin-bottom: 14px }
 .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden }
 .bar i { display: block; height: 100%; background: var(--jade) }
@@ -82,20 +83,67 @@ textarea { min-height: 72px; resize: vertical }
 .btn { font: 600 .92rem var(--body); border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line);
   background: var(--panel); color: var(--ink) }
 .btn.primary { background: var(--jade); border-color: var(--jade); color: var(--panel) }
+.btn.small { padding: 5px 10px; font-size: .85rem }
 .btn:disabled { opacity: .45; cursor: not-allowed }
 .progress { font-size: .88rem; color: var(--muted) }
 .empty { background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; padding: 28px 20px; text-align: center; color: var(--muted) }
 .empty h2 { color: var(--ink); font-size: 1.1rem; margin-bottom: 6px }
-.profile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px }
-.profile .wide { grid-column: 1 / -1 }
 .saved { font-size: .82rem; color: var(--muted); min-height: 1.2em }
 .how { margin-top: 28px; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); padding-top: 14px }
 .how ol { padding-left: 18px; margin: 6px 0 0 }
 .banner { background: var(--red-soft); color: var(--red); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px }
-@media (max-width: 720px) {
+.timeline { list-style: none; padding: 0; margin: 0 0 12px; font-size: .85rem; color: var(--muted) }
+.timeline li { display: flex; gap: 8px }
+.timeline b { color: var(--ink); font-weight: 600 }
+
+/* Tailored CV: a paper page beside the change log */
+.cvpanel { grid-column: 1 / -1; border-top: 1px dashed var(--line); padding-top: 16px;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px }
+.paperbox { min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: hidden }
+.paperscale { transform-origin: top left }
+.paper { width: 210mm; min-height: 297mm; background: var(--paper); color: var(--paper-ink); font: 10pt/1.16 var(--cv);
+  padding: 11mm 12.7mm; box-shadow: 0 1px 4px rgba(0,0,0,.15); position: relative }
+.paper .limit { position: absolute; left: 0; right: 0; top: 297mm; border-top: 2px dashed #c0392b }
+.paper .limit span { position: absolute; right: 6px; top: 2px; font: 600 9pt var(--body); color: #c0392b }
+.paper .nm { text-align: center; font-weight: 700; font-size: 13pt }
+.paper .hl { text-align: center }
+.paper .st { font-weight: 700; margin: 9pt 0 2pt; text-transform: uppercase }
+.paper .er { display: flex; justify-content: space-between; gap: 8pt }
+.paper .er b, .paper .er i { white-space: nowrap }
+.paper .bl { font-style: italic }
+.paper ul { margin: 1pt 0 3pt; padding-left: 16pt }
+.paper li { margin: 0 }
+.paper p { margin: 0 }
+.paper mark { background: var(--mark); color: inherit; padding: 0 1px }
+.paper mark sup { font: 700 7pt var(--body); color: #8a5a00; margin-left: 1px }
+.changes { min-width: 0; display: flex; flex-direction: column; gap: 10px }
+.chg { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: .9rem }
+.chg .n { font: 700 .75rem var(--mono); background: var(--mark); color: #6b4700; border-radius: 4px; padding: 1px 6px; margin-right: 6px }
+.chg .before { color: var(--muted); text-decoration: line-through; margin: 6px 0 2px }
+.chg .after { margin: 0 0 6px }
+.chg .why { color: var(--ink) }
+.chg .src { color: var(--muted); font-size: .82rem; margin-top: 4px }
+.checks { font-size: .88rem; border-radius: 8px; padding: 10px 12px; background: var(--jade-soft); color: var(--jade) }
+.checks.bad { background: var(--red-soft); color: var(--red) }
+
+/* Tracker */
+.board { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px }
+.col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 150px }
+.col h3 { display: flex; justify-content: space-between }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; background: var(--bg); font-size: .88rem }
+.card b { display: block; font-family: var(--display); font-size: .92rem; line-height: 1.25 }
+.card .m { color: var(--muted); font-size: .8rem; margin: 2px 0 6px }
+
+/* About me */
+.about { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; align-items: start }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px }
+.entry { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: var(--bg) }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px }
+.cvlist { margin: 0; padding-left: 18px; font-size: .9rem }
+
+@media (max-width: 820px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)) }
-  .sheet, .profile { grid-template-columns: minmax(0, 1fr) }
+  .sheet, .cvpanel, .about, .grid2 { grid-template-columns: minmax(0, 1fr) }
   .row { grid-template-columns: 1.75rem minmax(0, 1fr) }
   .chips { grid-column: 2; justify-content: start }
 }
@@ -104,10 +152,8 @@ textarea { min-height: 72px; resize: vertical }
 
 <div class="wrap">
   <header>
-    <div>
-      <h1>HK Job Desk</h1>
-      <p class="sub" id="runline">Waiting for the first morning run.</p>
-    </div>
+    <h1>HK Job Desk</h1>
+    <p class="sub" id="runline">Waiting for the first morning run.</p>
   </header>
 
   <div class="stats" aria-live="polite">
@@ -120,11 +166,12 @@ textarea { min-height: 72px; resize: vertical }
   <div id="banner" class="banner" hidden></div>
 
   <nav role="tablist" aria-label="Views">
-    <button role="tab" id="tab-today" data-view="today" aria-selected="true">Today's 20<span class="n" id="n-today"></span></button>
-    <button role="tab" id="tab-all" data-view="all" aria-selected="false">All ranked<span class="n" id="n-all"></span></button>
-    <button role="tab" id="tab-applied" data-view="applied" aria-selected="false">Applied<span class="n" id="n-applied"></span></button>
-    <button role="tab" id="tab-excluded" data-view="excluded" aria-selected="false">Excluded<span class="n" id="n-excluded"></span></button>
-    <button role="tab" id="tab-me" data-view="me" aria-selected="false">My details</button>
+    <button role="tab" data-view="today" aria-selected="true">Today's 20<span class="n" id="n-today"></span></button>
+    <button role="tab" data-view="earlier" aria-selected="false">Saved &amp; earlier<span class="n" id="n-earlier"></span></button>
+    <button role="tab" data-view="all" aria-selected="false">All ranked<span class="n" id="n-all"></span></button>
+    <button role="tab" data-view="tracker" aria-selected="false">Tracker<span class="n" id="n-tracker"></span></button>
+    <button role="tab" data-view="excluded" aria-selected="false">Excluded<span class="n" id="n-excluded"></span></button>
+    <button role="tab" data-view="about" aria-selected="false">About me</button>
   </nav>
 
   <p class="hint" id="viewhint"></p>
@@ -133,10 +180,9 @@ textarea { min-height: 72px; resize: vertical }
   <section class="how">
     <strong>How applying works</strong>
     <ol>
-      <li>Each morning the scraper ranks new jobs and picks today's top 20 you haven't applied to.</li>
-      <li>Open a job, fill in what it asks for, tick the documents you have, then press <em>Ready to apply</em>.</li>
-      <li>In the Claude app, say <em>"apply to my ready jobs"</em>. Claude fills each application in your browser,
-        shows you the filled form, and submits only after your OK. Nothing is invented: anything missing comes back to you as a question.</li>
+      <li>Each morning the scraper ranks new jobs, picks today's top 20 you haven't applied to, and tailors your CV for each.</li>
+      <li>Open a job: check the tailored CV and why each change was made, fill in what the posting asks for, then press <em>Ready to apply</em>. No time today? Press <em>Save for later</em>; it stays under <em>Saved &amp; earlier</em> even if it drops out of the top 20.</li>
+      <li>In the Claude app, say <em>"apply to my ready jobs"</em>. Claude fills each application in your browser, shows you the filled form, and submits only after your OK. Nothing is invented: anything missing comes back to you as a question.</li>
     </ol>
   </section>
 </div>
@@ -153,30 +199,33 @@ const PROFILE_FIELDS = [
   { id: "email", label: "Email for applications", hint: "" },
   { id: "notes", label: "Anything Claude should always know when applying", hint: "Preferences, things to never claim, wording you like", wide: true },
 ];
-// Job-posting info labels (from the scraper) that map to a standing answer.
 const INFO_TO_PROFILE = {
   "Expected salary": "expected_salary", "Current salary": "current_salary",
   "Availability / notice period": "availability", "Right to work / visa status": "right_to_work",
 };
-// CV versions saved in your Google Drive, suggested by role family.
 const CV_VERSIONS = ["PM", "BA", "Data Based", "Insurance Product", "Consulting", "Quant Finance", "KEY"];
 const CV_FOR = { product: "PM", business_analysis: "BA", ai_data: "Data Based", actuarial_finance: "Insurance Product", project: "PM" };
 const HINTS = {
   today: "Today's top picks you haven't applied to, best first. Rank mixes fit, interview odds and how recently it was posted.",
+  earlier: "Jobs you saved, and picks from earlier days you haven't applied to or skipped. They stay here even after they drop out of the top 20.",
   all: "Every eligible or borderline job from recent runs, best first.",
-  applied: "Applications sent, newest first.",
+  tracker: "Every application you've started, by stage. Move a card with its menu; each move is dated.",
   excluded: "Jobs that fit your profile but that you can't apply to, with the reason.",
-  me: "Standing answers reused on every application. Each job's form starts from these; change them per job if needed.",
+  about: "What Claude may use to tailor your CV, besides your CVs: add your work, projects and achievements in your own words. Standing answers fill in application forms.",
 };
+const STAGES = [
+  { id: "interested", label: "Saved" }, { id: "ready", label: "Ready" }, { id: "applied", label: "Applied" },
+  { id: "interviewing", label: "Interviewing" }, { id: "offer", label: "Offer" }, { id: "rejected", label: "Rejected" },
+];
 const DONE = ["applied", "interviewing", "offer", "rejected"];
 
-const state = { jobs: new Map(), tracking: new Map(), profile: {}, run: null, view: "today", open: new Set() };
+const state = { jobs: new Map(), tracking: new Map(), tailored: new Map(), profile: {}, about: { entries: [] },
+  cvs: new Map(), run: null, view: "today", open: new Set() };
 let db = null;
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function track(id) { return state.tracking.get(id) || {}; }
 function statusOf(id) { return track(id).status || "new"; }
-// A job's static details (jobs/<id>) merged with its current rank from the latest run.
 function getJob(id) {
   const job = state.jobs.get(id), r = state.run && state.run.ranks ? state.run.ranks[id] : null;
   return job && r ? { ...job, ...r, id } : null;
@@ -185,11 +234,11 @@ function allJobs() { return [...state.jobs.keys()].map(getJob).filter(Boolean); 
 function daysAgo(iso) {
   if (!iso) return "date unknown";
   const d = Math.round((Date.now() - new Date(iso.slice(0, 10) + "T00:00:00").getTime()) / 864e5);
-  return d <= 0 ? "posted today" : d === 1 ? "posted yesterday" : `posted ${d} days ago`;
+  return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`;
 }
 const byRank = (a, b) => (b.rank_score ?? -1) - (a.rank_score ?? -1);
+const todayPicks = () => new Set(state.run && state.run.picks || []);
 
-// Everything the employer asks for, resolved against saved answers.
 function requirements(job) {
   const t = track(job.id);
   const answers = t.answers || {}, docs = t.docs || {};
@@ -201,11 +250,11 @@ function requirements(job) {
   const documents = (job.documents || ["CV / resume"]).map(label => ({ label, ready: !!docs[label] }));
   const coverNeeded = documents.some(d => d.label === "Cover letter");
   const coverOk = !coverNeeded || !!(t.cover_letter || "").trim() || !!t.draft_cover_letter;
-  const cvChoice = t.cv_version || CV_FOR[job.category] || "PM";
+  const tl = state.tailored.get(job.id);
+  const cvChoice = t.cv_version || (tl ? "Tailored (" + tl.base + ")" : CV_FOR[job.category] || "PM");
   const missing = info.filter(i => !i.value.trim()).length
     + documents.filter(d => !d.ready && d.label !== "Cover letter").length + (coverOk ? 0 : 1);
-  const total = info.length + documents.length;
-  return { info, documents, coverNeeded, coverOk, cvChoice, missing, total };
+  return { info, documents, coverNeeded, coverOk, cvChoice, missing, total: info.length + documents.length };
 }
 
 function pillFor(job) {
@@ -214,13 +263,16 @@ function pillFor(job) {
   if (s === "ready") return `<span class="pill p-ready">Ready</span>`;
   if (job.eligibility === "ineligible") return `<span class="pill p-ineligible">Not eligible</span>`;
   const r = requirements(job);
+  const saved = s === "interested" ? `<span class="pill p-saved">Saved</span>` : "";
+  const earlier = !todayPicks().has(job.id) && job.last_picked ? `<span class="pill p-earlier">Picked ${esc(daysAgo(job.last_picked))}</span>` : "";
   const elig = job.eligibility === "check" ? `<span class="pill p-check">Check</span>` : "";
-  return elig + (r.missing ? `<span class="pill p-need">${r.missing} to fill</span>` : `<span class="pill p-eligible">Complete</span>`);
+  return saved + earlier + elig + (r.missing ? `<span class="pill p-need">${r.missing} to fill</span>` : `<span class="pill p-eligible">Complete</span>`);
 }
 
 function rowHTML(job, i) {
   const open = state.open.has(job.id);
-  const meta = [job.company, job.location, daysAgo(job.posted), job.applicants != null ? `${job.applicants} applicants` : "", job.salary]
+  const meta = [job.company, job.location, "posted " + daysAgo(job.posted), job.applicants != null ? `${job.applicants} applicants` : "",
+    state.tailored.has(job.id) ? "CV tailored" : "", job.salary]
     .filter(Boolean).map(esc).map(s => `<span>${s}</span>`).join("");
   return `<article class="job" data-id="${job.id}">
     <button class="row" aria-expanded="${open}" data-toggle="${job.id}">
@@ -237,6 +289,13 @@ function bar(label, v) {
   return `<span>${label}</span><span class="bar"><i style="width:${n}%"></i></span><span class="score">${n}</span>`;
 }
 
+function timelineHTML(t) {
+  const h = t.history || [];
+  if (!h.length) return "";
+  const name = s => (STAGES.find(x => x.id === s) || { label: s }).label;
+  return `<ul class="timeline">${h.map(e => `<li><b>${esc(name(e.status))}</b><span>${esc((e.at || "").slice(0, 10))}</span></li>`).join("")}</ul>`;
+}
+
 function sheetHTML(job) {
   const t = track(job.id), r = requirements(job), id = job.id, s = statusOf(id);
   const fit = Math.min(100, (job.score || 0) * 2);
@@ -247,11 +306,11 @@ function sheetHTML(job) {
   const infoFields = r.info.map((f, k) => `<div class="field">
       <label for="i-${id}-${k}">${esc(f.label)}</label>
       <input type="text" id="i-${id}-${k}" data-answer="${esc(f.label)}" data-job="${id}" value="${esc(f.value)}">
-      ${f.fromProfile ? `<small>From My details. Edit to change it for this job only.</small>` : ""}
+      ${f.fromProfile ? `<small>From About me. Edit to change it for this job only.</small>` : ""}
     </div>`).join("");
   const docChecks = r.documents.filter(d => d.label !== "Cover letter").map((d, k) => `<label class="check">
       <input type="checkbox" id="d-${id}-${k}" data-doc="${esc(d.label)}" data-job="${id}" ${d.ready ? "checked" : ""}>
-      <span>${esc(d.label)} ready${d.label === "CV / resume" ? " (uploaded to JobsDB/LinkedIn or on your computer)" : ""}</span></label>`).join("");
+      <span>${esc(d.label)} ready${d.label === "CV / resume" ? " (the tailored CV below, saved as a file)" : ""}</span></label>`).join("");
   const cover = r.coverNeeded ? `<div class="field">
       <label for="c-${id}">Cover letter</label>
       <textarea id="c-${id}" data-cover="${id}" placeholder="Paste your cover letter, or tick the box below">${esc(t.cover_letter || "")}</textarea>
@@ -279,87 +338,216 @@ function sheetHTML(job) {
       ${infoFields}
       ${docChecks}
       <div class="field">
-        <label for="cv-${id}">CV version to send</label>
-        <select id="cv-${id}" data-cv="${id}">${CV_VERSIONS.map(v => `<option ${v === r.cvChoice ? "selected" : ""}>${v}</option>`).join("")}</select>
-        <small>Your Google Drive CV variants. Suggested from the role type.</small>
+        <label for="cv-${id}">CV to send</label>
+        <select id="cv-${id}" data-cv="${id}">${[state.tailored.has(id) ? "Tailored (" + state.tailored.get(id).base + ")" : null, ...CV_VERSIONS].filter(Boolean)
+          .map(v => `<option ${v === r.cvChoice ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
       </div>
       ${cover}`}
       <div class="field">
         <label for="n-${id}">Notes for Claude</label>
         <textarea id="n-${id}" data-notes="${id}" placeholder="Answers to screening questions, things to mention, or why to skip">${esc(t.notes || "")}</textarea>
       </div>
+      ${timelineHTML(t)}
       <div class="actions">
         ${job.eligibility !== "ineligible" && !applied ? `<button class="btn primary" data-ready="${id}" ${r.missing ? "disabled" : ""}>${s === "ready" ? "Ready ✓" : "Ready to apply"}</button>` : ""}
+        ${!applied && s !== "interested" && s !== "ready" ? `<button class="btn" data-save="${id}">Save for later</button>` : ""}
         ${!applied && s !== "ignored" ? `<button class="btn" data-skip="${id}">Skip this job</button>` : ""}
         ${s === "ignored" ? `<button class="btn" data-unskip="${id}">Restore</button>` : ""}
-        ${applied ? `<label class="progress" for="st-${id}">Status</label><select id="st-${id}" data-status="${id}">${DONE.map(x => `<option ${x === s ? "selected" : ""}>${x}</option>`).join("")}</select>` : ""}
+        ${applied ? `<label class="progress" for="st-${id}">Stage</label><select id="st-${id}" data-status="${id}">${DONE.map(x => `<option value="${x}" ${x === s ? "selected" : ""}>${esc(STAGES.find(y => y.id === x).label)}</option>`).join("")}</select>` : ""}
         <span class="saved" id="saved-${id}">${t.applied_at ? "Applied " + esc(t.applied_at.slice(0, 10)) : ""}</span>
       </div>
     </div>
+    ${job.eligibility === "ineligible" ? "" : cvPanelHTML(job)}
   </div>`;
 }
 
+// ---- Tailored CV ----
+function txt(x) { return typeof x === "string" ? x : (x && x.text) || ""; }
+function chg(x) { return x && typeof x === "object" && Number.isInteger(x.change) ? x.change : null; }
+function marked(x) {
+  const c = chg(x), t = esc(txt(x));
+  return c == null ? t : `<mark>${t}<sup>${c + 1}</sup></mark>`;
+}
+function cvHTML(cv) {
+  const h = cv.header || {};
+  let out = `<p class="nm">${esc(h.name)}</p>${(h.lines || []).map(l => `<p class="hl">${esc(l)}</p>`).join("")}`;
+  for (const s of cv.sections || []) {
+    out += `<p class="st">${esc(s.title)}</p>`;
+    if (s.text) out += `<p>${marked(s.text)}</p>`;
+    for (const e of s.entries || []) {
+      out += `<div class="er"><b>${marked(e.org)}</b><b>${esc(e.location || "")}</b></div>`;
+      if (e.role || e.dates) out += `<div class="er"><b>${marked(e.role || "")}</b><i>${esc(e.dates || "")}</i></div>`;
+      if (txt(e.blurb)) out += `<p class="bl">${marked(e.blurb)}</p>`;
+      if ((e.bullets || []).length) out += `<ul>${e.bullets.map(b => `<li>${marked(b)}</li>`).join("")}</ul>`;
+    }
+    for (const l of s.lines || []) out += `<p><b>${esc(l.label)}:</b> ${marked(l.text)}</p>`;
+  }
+  return out;
+}
+function cvPlain(cv) {
+  const h = cv.header || {}, lines = [h.name, ...(h.lines || []), ""];
+  for (const s of cv.sections || []) {
+    lines.push(s.title);
+    if (s.text) lines.push(txt(s.text));
+    for (const e of s.entries || []) {
+      lines.push([txt(e.org), e.location].filter(Boolean).join("\t"));
+      if (e.role || e.dates) lines.push([txt(e.role), e.dates].filter(Boolean).join("\t"));
+      if (txt(e.blurb)) lines.push(txt(e.blurb));
+      for (const b of e.bullets || []) lines.push("• " + txt(b));
+    }
+    for (const l of s.lines || []) lines.push(`${l.label}: ${txt(l.text)}`);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+function cvPanelHTML(job) {
+  const tl = state.tailored.get(job.id);
+  if (!tl) return `<div class="cvpanel"><div style="grid-column:1/-1"><h3>Tailored CV</h3>
+    <p class="hint">Not tailored yet. The morning run tailors each new pick; to do it now, ask Claude: "tailor my CV for ${esc(job.title)} at ${esc(job.company)}".</p></div></div>`;
+  const c = tl.checks || {};
+  const checks = `<div class="checks ${c.ok ? "" : "bad"}">${c.ok ? "Checks passed" : "Needs attention"}:
+    ${c.words ?? "?"} of ${c.base_words ?? "?"} words, ${c.bullets ?? "?"} of ${c.base_bullets ?? "?"} bullets (base CV: ${esc(tl.base)}),
+    ${(c.unsourced || []).length ? "not found in your CVs or About me: " + esc(c.unsourced.join(", ")) : "every number and name found in your CVs or About me"}.
+    ${(c.problems || []).filter(p => !p.startsWith("Not found")).map(esc).join(" ")}</div>`;
+  const changes = (tl.changes || []).map((x, i) => `<div class="chg"><span class="n">${i + 1}</span><b>${esc(x.where || "")}</b>
+      ${x.before ? `<p class="before">${esc(x.before)}</p>` : ""}${x.after ? `<p class="after">${esc(x.after)}</p>` : ""}
+      <div class="why">${esc(x.why || "")}</div>${x.sources ? `<div class="src">Facts from: ${esc([].concat(x.sources).join("; "))}</div>` : ""}</div>`).join("");
+  return `<div class="cvpanel">
+    <div class="paperbox"><div class="paperscale" data-paper="${job.id}"><div class="paper">${cvHTML(tl.cv)}<div class="limit"><span>End of A4 page</span></div></div></div></div>
+    <div class="changes">
+      <h3>What changed and why</h3>
+      ${checks}
+      <p class="hint" id="fit-${job.id}"></p>
+      ${tl.summary ? `<p>${esc(tl.summary)}</p>` : ""}
+      ${changes || `<p class="hint">No changes from the ${esc(tl.base)} CV.</p>`}
+      <div class="actions"><button class="btn small" data-copycv="${job.id}">Copy CV text</button><span class="saved" id="copied-${job.id}"></span></div>
+    </div>
+  </div>`;
+}
+function fitPapers() {
+  for (const box of document.querySelectorAll("[data-paper]")) {
+    const paper = box.firstElementChild, outer = box.parentElement;
+    const scale = Math.min(1, (outer.clientWidth - 20) / paper.offsetWidth);
+    box.style.transform = `scale(${scale})`;
+    box.style.height = (paper.offsetHeight * scale) + "px";
+    const pageH = paper.querySelector(".limit").offsetTop;
+    const used = paper.scrollHeight;
+    const contentBottom = [...paper.children].filter(el => !el.classList.contains("limit"))
+      .reduce((m, el) => Math.max(m, el.offsetTop + el.offsetHeight), 0);
+    const note = document.getElementById("fit-" + box.dataset.paper);
+    if (note) note.textContent = contentBottom <= pageH
+      ? "Fits on one A4 page in this preview (Times New Roman 10pt, your CV's layout)."
+      : "Runs past one A4 page in this preview. Check it in Google Docs before sending.";
+  }
+}
+
+// ---- Lists ----
 function listFor(view) {
-  const jobs = allJobs();
+  const jobs = allJobs(), picks = todayPicks();
   if (view === "today") return (state.run && state.run.picks || []).map(getJob)
     .filter(j => j && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored");
+  if (view === "earlier") return jobs.filter(j => !picks.has(j.id) && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored"
+      && (statusOf(j.id) === "interested" || statusOf(j.id) === "ready" || j.last_picked))
+    .sort((a, b) => (statusOf(b.id) === "interested") - (statusOf(a.id) === "interested") || (b.last_picked || "").localeCompare(a.last_picked || "") || byRank(a, b));
   if (view === "all") return jobs.filter(j => j.eligibility !== "ineligible" && !DONE.includes(statusOf(j.id))).sort(byRank);
-  if (view === "applied") return jobs.filter(j => DONE.includes(statusOf(j.id)))
-    .sort((a, b) => (track(b.id).applied_at || "").localeCompare(track(a.id).applied_at || ""));
   if (view === "excluded") return jobs.filter(j => j.eligibility === "ineligible").sort((a, b) => (b.score || 0) - (a.score || 0));
   return [];
 }
+function trackedJobs() {
+  return [...state.tracking.entries()].filter(([, t]) => STAGES.some(s => s.id === t.status))
+    .map(([id, t]) => ({ id, t, job: state.jobs.get(id) })).filter(x => x.job);
+}
 
 function render() {
-  const today = listFor("today"), all = listFor("all"), applied = listFor("applied"), excluded = listFor("excluded");
-  const readyCount = allJobs().filter(j => statusOf(j.id) === "ready").length;
+  const today = listFor("today"), earlier = listFor("earlier"), all = listFor("all"), excluded = listFor("excluded");
+  const tracked = trackedJobs();
   document.getElementById("s-picks").textContent = today.length;
   document.getElementById("s-need").textContent = today.filter(j => statusOf(j.id) !== "ready" && requirements(j).missing).length;
-  document.getElementById("s-ready").textContent = readyCount;
-  document.getElementById("s-applied").textContent = applied.length;
-  for (const [k, list] of Object.entries({ today, all, applied, excluded }))
-    document.getElementById("n-" + k).textContent = list.length || "";
+  document.getElementById("s-ready").textContent = tracked.filter(x => x.t.status === "ready").length;
+  document.getElementById("s-applied").textContent = tracked.filter(x => DONE.includes(x.t.status)).length;
+  for (const [k, n] of Object.entries({ today: today.length, earlier: earlier.length, all: all.length, excluded: excluded.length, tracker: tracked.length }))
+    document.getElementById("n-" + k).textContent = n || "";
   if (state.run) {
     const r = state.run;
     document.getElementById("runline").textContent =
-      `Last run ${r.date}: ${r.scraped ?? "?"} jobs scraped, ${r.new ?? "?"} new, ${r.eligible ?? "?"} eligible.` + (r.note ? " " + r.note : "");
+      `Last run ${r.date}: ${r.scraped ?? "?"} jobs scraped, ${r.new ?? "?"} new, ${r.eligible ?? "?"} eligible or worth checking.` + (r.note ? " " + r.note : "");
   }
   document.getElementById("viewhint").textContent = HINTS[state.view];
   for (const b of document.querySelectorAll("nav button")) b.setAttribute("aria-selected", String(b.dataset.view === state.view));
 
   const view = document.getElementById("view");
-  if (state.view === "me") { view.innerHTML = profileHTML(); return; }
+  if (state.view === "about") { view.innerHTML = aboutHTML(); return; }
+  if (state.view === "tracker") { view.innerHTML = trackerHTML(tracked); return; }
   const list = listFor(state.view);
   if (!list.length) {
     const msg = state.run
-      ? { today: "Nothing left to apply to from today's picks.", all: "No ranked jobs yet.", applied: "No applications yet.", excluded: "Nothing excluded." }[state.view]
+      ? { today: "Nothing left to apply to from today's picks.", earlier: "Nothing saved or carried over. Press Save for later on any job to keep it here.", all: "No ranked jobs yet.", excluded: "Nothing excluded." }[state.view]
       : "No jobs yet. The morning run fills this desk with ranked Hong Kong jobs and today's top 20.";
-    view.innerHTML = `<div class="empty"><h2>${esc(msg)}</h2><p>While you wait, fill in <a href="#" data-goto="me">My details</a> so applications start pre-filled.</p></div>`;
+    view.innerHTML = `<div class="empty"><h2>${esc(msg)}</h2><p>Meanwhile, add your experience under <a href="#" data-goto="about">About me</a> so tailored CVs can use it.</p></div>`;
     return;
   }
   view.innerHTML = `<div class="list">${list.map(rowHTML).join("")}</div>`;
+  requestAnimationFrame(fitPapers);
 }
 
-function profileHTML() {
-  return `<form class="profile" id="profile-form" autocomplete="off">
-    ${PROFILE_FIELDS.map(f => `<div class="field ${f.wide ? "wide" : ""}">
-      <label for="p-${f.id}">${esc(f.label)}</label>
-      ${f.wide ? `<textarea id="p-${f.id}" data-profile="${f.id}">${esc(state.profile[f.id] || "")}</textarea>`
-               : `<input type="text" id="p-${f.id}" data-profile="${f.id}" value="${esc(state.profile[f.id] || "")}">`}
-      ${f.hint ? `<small>${esc(f.hint)}</small>` : ""}
-    </div>`).join("")}
-    <div class="saved wide" id="saved-profile"></div>
-  </form>`;
+function trackerHTML(tracked) {
+  if (!tracked.length) return `<div class="empty"><h2>No applications started yet.</h2><p>Save a job, mark one Ready, or apply, and it appears here.</p></div>`;
+  const week = Date.now() - 7 * 864e5;
+  const appliedWeek = tracked.filter(x => x.t.applied_at && new Date(x.t.applied_at).getTime() >= week).length;
+  const cols = STAGES.map(st => {
+    const cards = tracked.filter(x => x.t.status === st.id)
+      .sort((a, b) => (b.t.updated_at || "").localeCompare(a.t.updated_at || ""))
+      .map(({ id, t, job }) => `<div class="card"><b>${esc(job.title)}</b><div class="m">${esc(job.company)} · ${esc(st.id === "applied" && t.applied_at ? "applied " + daysAgo(t.applied_at) : "updated " + daysAgo(t.updated_at))}</div>
+        <label class="progress" for="tr-${id}">Move to</label>
+        <select id="tr-${id}" data-status="${id}">${STAGES.map(x => `<option value="${x.id}" ${x.id === st.id ? "selected" : ""}>${x.label}</option>`).join("")}<option value="new">Back to list</option></select></div>`).join("");
+    return `<section class="col"><h3><span>${st.label}</span><span>${tracked.filter(x => x.t.status === st.id).length}</span></h3>${cards}</section>`;
+  }).join("");
+  return `<p class="progress">${appliedWeek} applied in the last 7 days.</p><div class="board tracker">${cols}</div>`;
+}
+
+function aboutHTML() {
+  const entries = state.about.entries || [];
+  const cvs = [...state.cvs.values()];
+  return `<div class="about">
+    <section class="box">
+      <h2>Experience &amp; achievements</h2>
+      <p class="hint">Claude tailors your CV from your CVs plus what's written here, and nothing else. Be specific: what you did, tools, numbers, who used it. Saved as you type.</p>
+      ${entries.map((e, i) => `<div class="entry">
+        <div class="grid2">
+          <div class="field"><label for="a-t-${i}">Role or achievement</label><input type="text" id="a-t-${i}" data-about="${i}" data-k="title" value="${esc(e.title)}"></div>
+          <div class="field"><label for="a-o-${i}">Organisation</label><input type="text" id="a-o-${i}" data-about="${i}" data-k="org" value="${esc(e.org)}"></div>
+        </div>
+        <div class="field"><label for="a-d-${i}">Dates</label><input type="text" id="a-d-${i}" data-about="${i}" data-k="dates" value="${esc(e.dates)}"></div>
+        <div class="field"><label for="a-x-${i}">Details</label><textarea id="a-x-${i}" data-about="${i}" data-k="details" style="min-height:140px">${esc(e.details)}</textarea></div>
+        <button class="btn small" data-delentry="${i}">Remove</button>
+      </div>`).join("")}
+      <button class="btn" data-addentry="1">Add an entry</button>
+      <div class="saved" id="saved-about"></div>
+    </section>
+    <section class="box">
+      <h2>Standing answers</h2>
+      <p class="hint">Reused on every application form.</p>
+      <form id="profile-form" autocomplete="off">
+      ${PROFILE_FIELDS.map(f => `<div class="field">
+        <label for="p-${f.id}">${esc(f.label)}</label>
+        ${f.wide ? `<textarea id="p-${f.id}" data-profile="${f.id}">${esc(state.profile[f.id] || "")}</textarea>`
+                 : `<input type="text" id="p-${f.id}" data-profile="${f.id}" value="${esc(state.profile[f.id] || "")}">`}
+        ${f.hint ? `<small>${esc(f.hint)}</small>` : ""}
+      </div>`).join("")}
+      </form>
+      <div class="saved" id="saved-profile"></div>
+      <h2 style="margin-top:18px">CV versions Claude tailors from</h2>
+      ${cvs.length ? `<ul class="cvlist">${cvs.map(c => `<li>${esc(c.variant)}: ${esc(c.drive_title || "")}</li>`).join("")}</ul>` : `<p class="hint">None loaded yet.</p>`}
+    </section>
+  </div>`;
 }
 
 // ---- Writes: one at a time per document, coalesced while typing ----
-const pending = new Map();   // path -> { data, timer }
-const inflight = new Map();  // path -> promise
+const pending = new Map(), inflight = new Map();
 function queueWrite(path, data, savedEl, delay = 700) {
   const p = pending.get(path);
   if (p) clearTimeout(p.timer);
-  const entry = { data, timer: setTimeout(() => flush(path, savedEl), delay) };
-  pending.set(path, entry);
+  pending.set(path, { data, timer: setTimeout(() => flush(path, savedEl), delay) });
 }
 async function flush(path, savedEl) {
   const entry = pending.get(path);
@@ -369,27 +557,35 @@ async function flush(path, savedEl) {
   const run = db.doc(path).set(entry.data).then(() => {
     const el = savedEl && document.getElementById(savedEl);
     if (el) el.textContent = "Saved";
-  }).catch(e => showError(e));
+  }).catch(showError);
   inflight.set(path, run);
   await run;
 }
 function showError(e) {
   const b = document.getElementById("banner");
   b.hidden = false;
-  b.textContent = e && e.code === "quota_exceeded" ? "The desk's storage is full. Old jobs need clearing; ask Claude to prune them."
+  b.textContent = e && e.code === "quota_exceeded" ? "The desk's storage is full. Ask Claude to prune old jobs."
     : "Couldn't save that change. Check your connection and try again.";
 }
 function updateTracking(id, patch, immediate) {
-  const job = getJob(id);
-  const next = { ...track(id), ...patch, key: job ? job.key : track(id).key, updated_at: new Date().toISOString() };
+  const job = state.jobs.get(id), prev = track(id), now = new Date().toISOString();
+  const next = { ...prev, ...patch, key: job ? job.key : prev.key, updated_at: now };
+  if (patch.status && patch.status !== prev.status) {
+    next.history = [...(prev.history || []), { status: patch.status, at: now }];
+    if (patch.status === "applied" && !prev.applied_at) next.applied_at = now;
+  }
   state.tracking.set(id, next);
   queueWrite("tracking/" + id, next, "saved-" + id, immediate ? 0 : 700);
 }
+function saveAbout() {
+  state.about = { ...state.about, updated_at: new Date().toISOString() };
+  queueWrite("about/me", state.about, "saved-about");
+  const s = document.getElementById("saved-about"); if (s) s.textContent = "Saving…";
+}
 function refreshSheet(id) {
   const art = document.querySelector(`article[data-id="${id}"]`);
-  if (!art) return;
-  // Update the summary chips and progress without rebuilding inputs (keeps focus while typing).
-  const job = getJob(id); if (!job) return;
+  const job = getJob(id);
+  if (!art || !job) return;
   const r = requirements(job);
   art.querySelector(".chips").innerHTML = pillFor(job) + `<span class="score">${job.rank_score != null ? job.rank_score.toFixed(1) : "–"}</span>`;
   const prog = art.querySelector(".progress"); if (prog) prog.textContent = r.missing ? `${r.missing} of ${r.total} still needed` : "Everything provided";
@@ -403,14 +599,19 @@ document.addEventListener("click", e => {
   if (t.dataset.view) { state.view = t.dataset.view; render(); return; }
   if (t.dataset.toggle) { const id = t.dataset.toggle; state.open.has(id) ? state.open.delete(id) : state.open.add(id); render(); return; }
   if (t.dataset.ready) {
-    const id = t.dataset.ready, job = getJob(id), r = requirements(job);
-    // Freeze the resolved answers so the application uses exactly what was shown.
-    const answers = Object.fromEntries(r.info.map(i => [i.label, i.value]));
-    updateTracking(id, { status: "ready", answers, cv_version: r.cvChoice, ready_at: new Date().toISOString() }, true);
+    const id = t.dataset.ready, r = requirements(getJob(id));
+    updateTracking(id, { status: "ready", answers: Object.fromEntries(r.info.map(i => [i.label, i.value])), cv_version: r.cvChoice, ready_at: new Date().toISOString() }, true);
     render(); return;
   }
+  if (t.dataset.save) { updateTracking(t.dataset.save, { status: "interested" }, true); render(); return; }
   if (t.dataset.skip) { updateTracking(t.dataset.skip, { status: "ignored" }, true); render(); return; }
   if (t.dataset.unskip) { updateTracking(t.dataset.unskip, { status: "new" }, true); render(); return; }
+  if (t.dataset.addentry) { state.about = { ...state.about, entries: [...(state.about.entries || []), { title: "", org: "", dates: "", details: "" }] }; saveAbout(); render(); return; }
+  if (t.dataset.delentry) { const i = +t.dataset.delentry; state.about = { ...state.about, entries: state.about.entries.filter((_, k) => k !== i) }; saveAbout(); render(); return; }
+  if (t.dataset.copycv) {
+    const id = t.dataset.copycv, tl = state.tailored.get(id), out = document.getElementById("copied-" + id);
+    navigator.clipboard.writeText(cvPlain(tl.cv)).then(() => { out.textContent = "Copied"; }, () => { out.textContent = "Copy isn't allowed here; select the CV text instead."; });
+  }
 });
 document.addEventListener("input", e => {
   const el = e.target, id = el.dataset.job || el.dataset.cover || el.dataset.notes;
@@ -420,9 +621,15 @@ document.addEventListener("input", e => {
     const s = document.getElementById("saved-profile"); if (s) s.textContent = "Saving…";
     return;
   }
+  if (el.dataset.about) {
+    const i = +el.dataset.about, entries = [...state.about.entries];
+    entries[i] = { ...entries[i], [el.dataset.k]: el.value };
+    state.about = { ...state.about, entries };
+    saveAbout(); return;
+  }
   if (el.dataset.answer) {
     const t = track(id);
-    updateTracking(id, { answers: { ...(t.answers || {}), [el.dataset.answer]: el.value }, ...(t.status === "ready" ? { status: "new" } : {}) });
+    updateTracking(id, { answers: { ...(t.answers || {}), [el.dataset.answer]: el.value }, ...(t.status === "ready" ? { status: "interested" } : {}) });
   } else if (el.dataset.cover) updateTracking(id, { cover_letter: el.value });
   else if (el.dataset.notes) updateTracking(id, { notes: el.value });
   else return;
@@ -435,8 +642,8 @@ document.addEventListener("change", e => {
   else if (el.dataset.cv) updateTracking(el.dataset.cv, { cv_version: el.value }, true);
   else if (el.dataset.status) { updateTracking(el.dataset.status, { status: el.value }, true); render(); }
 });
+addEventListener("resize", () => requestAnimationFrame(fitPapers));
 
-// Re-render from snapshots, but never while you're typing in the desk.
 let renderQueued = false;
 function scheduleRender() {
   const a = document.activeElement;
@@ -456,9 +663,7 @@ render();
     return;
   }
   const onErr = e => showError(e);
-  db.collection("jobs").onSnapshot(snap => {
-    state.jobs = new Map(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }])); scheduleRender();
-  }, onErr);
+  db.collection("jobs").onSnapshot(snap => { state.jobs = new Map(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }])); scheduleRender(); }, onErr);
   db.collection("tracking").onSnapshot(snap => {
     for (const ch of snap.docChanges()) {
       if (ch.type === "removed") state.tracking.delete(ch.doc.id);
@@ -466,12 +671,10 @@ render();
     }
     scheduleRender();
   }, onErr);
-  db.doc("profile/me").onSnapshot(snap => {
-    if (!pending.has("profile/me")) state.profile = snap.exists ? { ...snap.data() } : {};
-    scheduleRender();
-  }, onErr);
-  db.collection("runs").orderBy("at", "desc").limit(1).onSnapshot(snap => {
-    state.run = snap.empty ? null : snap.docs[0].data(); scheduleRender();
-  }, onErr);
+  db.collection("tailored").onSnapshot(snap => { state.tailored = new Map(snap.docs.map(d => [d.id, d.data()])); scheduleRender(); }, onErr);
+  db.collection("cvs").onSnapshot(snap => { state.cvs = new Map(snap.docs.map(d => [d.id, d.data()])); scheduleRender(); }, onErr);
+  db.doc("profile/me").onSnapshot(snap => { if (!pending.has("profile/me")) state.profile = snap.exists ? { ...snap.data() } : {}; scheduleRender(); }, onErr);
+  db.doc("about/me").onSnapshot(snap => { if (!pending.has("about/me")) state.about = snap.exists ? { entries: [], ...snap.data() } : { entries: [] }; scheduleRender(); }, onErr);
+  db.collection("runs").orderBy("at", "desc").limit(1).onSnapshot(snap => { state.run = snap.empty ? null : snap.docs[0].data(); scheduleRender(); }, onErr);
 })();
 </script>

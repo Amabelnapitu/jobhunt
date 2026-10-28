@@ -7,6 +7,7 @@ rank_score (0-100) = weighted mix of
 Ineligible jobs get no rank. "check" jobs (unclear or stretch) are discounted.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -44,6 +45,10 @@ def eligibility(a: Analysis, title: str, candidate: dict, has_description: bool)
         hard.append("Requires fluent Mandarin")
     if a.languages.get("bilingual_unspecified"):
         soft.append("Asks for 'bilingual': check which languages")
+    if a.cs_background == "required" and not candidate.get("cs_degree", False):
+        hard.append("Requires a computer science / software engineering background")
+    elif a.cs_background == "preferred" and not candidate.get("cs_degree", False):
+        soft.append("Asks for computer science fundamentals")
     if a.pr_only and not candidate.get("permanent_resident", False):
         hard.append("HK permanent residents only")
 
@@ -53,8 +58,14 @@ def eligibility(a: Analysis, title: str, candidate: dict, has_description: bool)
         elif a.years_required > qualified:
             soft.append(f"Requires {a.years_required} years' experience (stretch)")
 
-    if _words(title) & {"director", "head", "chief", "vp"}:
+    words, low = _words(title), title.lower()
+    if words & {"director", "head", "chief", "vp"}:
         hard.append("Executive-level title")
+    elif re.search(r"\bprincipal\b|senior manager|\bsvp\b|vice president", low):
+        hard.append("Senior-level title")
+    elif re.search(r"\bmanager\b", low) and not re.search(r"product manager|project manager", low) \
+            and not words & {"assistant", "associate", "junior", "trainee", "graduate"}:
+        soft.append("Manager-level title: confirm the experience it expects")
     if not has_description:
         soft.append("Only a short summary is available: open the posting to confirm language "
                     "and experience requirements")

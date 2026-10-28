@@ -41,7 +41,9 @@ Work in a scratch folder (call it `$W`) for state and sync files; run commands f
    - `list` collection `jobs`, `out_dir` = `$W/state`, `query.limit` 1000 (follow `next_cursor`
      until done).
    - `list` collection `tracking`, same `out_dir`.
-   Files land in `$W/state/jobs/` and `$W/state/tracking/`. Then:
+   - `query` collection `runs` with `order_by` `{"field": "at", "direction": "desc"}` and
+     `limit` 1, same `out_dir` (it remembers earlier picks, so they stay on the dashboard).
+   Files land in `$W/state/jobs/`, `$W/state/tracking/` and `$W/state/runs/`. Then:
    `python -m jobhunt import-state $W/state --db $W/jobs.db`
 
 4. **Scrape, read job pages, enrich, rank, pick.**
@@ -62,5 +64,11 @@ Work in a scratch folder (call it `$W`) for state and sync files; run commands f
    "note": <the note>}` — but first `list` `runs` and copy the latest run's `picks` and `ranks`
    into it so yesterday's picks stay visible.)
 
-7. **Report** in two or three lines: jobs scraped, new, eligible, top three picks (title,
-   company), and anything that failed. No other output is needed.
+7. **Tailor CVs for today's picks.** `list` collection `tailored` (with `out_dir`) to see which
+   picks already have one. For each pick in the new run document's `picks` without a tailored CV,
+   or whose tailored CV is older than `about/me`'s `updated_at`, follow
+   `.claude/skills/tailor-cv/SKILL.md`. Every one must pass `cv-check` before it is saved; skip
+   (and report) any you can't get to pass rather than loosening the rules.
+
+8. **Report** in two or three lines: jobs scraped, new, eligible, top three picks (title,
+   company), CVs tailored, and anything that failed. No other output is needed.

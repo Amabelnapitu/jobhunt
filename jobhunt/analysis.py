@@ -47,12 +47,21 @@ class Analysis:
     # language -> "required" | "preferred"; "chinese_written" covers reading/writing Chinese.
     languages: dict[str, str] = field(default_factory=dict)
     years_required: int | None = None
+    # "required" when the posting insists on a CS / software engineering background,
+    # "preferred" when it only asks for strong CS fundamentals or prefers such a degree.
+    cs_background: str | None = None
     pr_only: bool = False
     agency: bool = False
 
 
 def _sentences(text: str) -> list[str]:
     return [s for s in _SENTENCE_SPLIT.split(text) if s and s.strip()]
+
+
+def _clauses(sentence: str) -> list[str]:
+    """Split asides off a sentence, so "(Cantonese is a plus)" doesn't make the rest optional."""
+    parts = re.split(r"[()\[\]]|;|\s[-–—]\s", sentence)
+    return [p for p in parts if p.strip()]
 
 
 def _languages(text: str) -> dict[str, str]:
@@ -62,8 +71,8 @@ def _languages(text: str) -> dict[str, str]:
         if found.get(lang) != "required":  # required wins over preferred
             found[lang] = level
 
-    for sentence in _sentences(text):
-        s = sentence.lower()
+    for clause in (c for sentence in _sentences(text) for c in _clauses(sentence)):
+        s = clause.lower()
         level = "preferred" if re.search(_PREFERRED, s) else "required"
         if "trilingual" in s:
             note("cantonese", level)
@@ -72,7 +81,8 @@ def _languages(text: str) -> dict[str, str]:
             note("cantonese", level)
         if re.search(r"mandarin|putonghua", s):
             # Conversational/basic Mandarin is fine for this candidate; fluent/native is not.
-            if level == "required" and not re.search(r"fluent|native|excellent|proficien|strong|good command|business", s):
+            # "Bilingual English/Mandarin" means fluent.
+            if level == "required" and not re.search(r"fluent|native|excellent|proficien|strong|good command|business|bilingual", s):
                 level = "preferred"
             note("mandarin", level)
         if re.search(r"written chinese|chinese writing|read(?:ing)? (?:and|&) writ\w+ (?:in )?chinese|"
@@ -88,8 +98,20 @@ def _languages(text: str) -> dict[str, str]:
     return found
 
 
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+                 "eight": 8, "nine": 9, "ten": 10}
+_WORD_YEARS = re.compile(r"\b(one|two|three|four|five|six|seven|eight|nine|ten|several)\s*(?:\(\d+\)\s*)?"
+                         r"(?:\+|or more|to \w+)?\s*(?:years?|yrs?)['’]?\s*(?:of\s+)?(?:[a-z/&-]+\s+){0,3}?experience",
+                         re.I)
+_CS_REQUIRED = re.compile(r"must (?:have|possess)[^.]{0,40}(?:computer science|software engineering)[^.]{0,30}background", re.I)
+_CS_PREFERRED = re.compile(r"(?:strong )?computer science fundamentals|degree in computer science[^.]{0,40}(?:required|is a must)", re.I)
+
+
 def _years(text: str) -> int | None:
     found = [int(m.group(1)) for m in _YEARS.finditer(text)]
+    # "Several years" is read as 3, the smallest number it usually means.
+    found += [3 if m.group(1).lower() == "several" else _NUMBER_WORDS[m.group(1).lower()]
+              for m in _WORD_YEARS.finditer(text)]
     found = [y for y in found if y <= 20]
     return max(found) if found else None
 
@@ -102,6 +124,7 @@ def analyze(description: str, company: str = "") -> Analysis:
     a.info_needed = [label for label, pat in INFO if re.search(pat, lower)]
     a.languages = _languages(text)
     a.years_required = _years(text)
+    a.cs_background = "required" if _CS_REQUIRED.search(text) else "preferred" if _CS_PREFERRED.search(text) else None
     a.pr_only = bool(_PR_ONLY.search(text))
     a.agency = any(name in company.lower() for name in AGENCIES)
     return a

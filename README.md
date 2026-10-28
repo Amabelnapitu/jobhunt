@@ -17,7 +17,15 @@ construction and engineering "project manager" roles, which would otherwise floo
 2. **The dashboard** ([HK Job Desk](https://claude.ai/artifact/DvVMwRvqcSDEpBjgEiJRXT), private)
    shows the picks, why each ranks where it does, and what each application needs: documents,
    salary/notice details, cover letter. Fill those in and press *Ready to apply*.
-3. **Applying**: in the Claude app, say "apply to my ready jobs". Claude follows
+3. **Tailored CVs**: each pick gets a CV tailored from your existing CV versions
+   (`.claude/skills/tailor-cv`). The dashboard shows it on an A4 page beside a numbered list of
+   every change, why it was made, and where the facts come from. Rules: no fact that isn't in
+   your CVs or your About me page; same template; never more words or bullets than the base CV
+   (it fills the page). `python -m jobhunt cv-check` enforces the budget and flags any number or
+   name not found in your sources.
+4. **Saved & earlier, tracker**: jobs you save, and picks from earlier days, stay available after
+   they drop out of the top 20. The tracker shows every application by stage, with dates.
+5. **Applying**: in the Claude app, say "apply to my ready jobs". Claude follows
    `.claude/skills/apply-jobs`: fills each form in your signed-in browser, shows you the filled
    form, and submits only after your OK. It never invents answers and never applies twice.
 
@@ -46,6 +54,11 @@ Easy Apply) and the **documents and details the posting asks for**.
 | `runs/<stamp>` | morning run          | that run's picks, and every job's rank, eligibility and scores |
 | `tracking/<id>`| you, apply workflow  | your answers, documents ticked, cover letter, status, applied date |
 | `profile/me`   | you                  | standing answers (expected salary, availability, ...) |
+| `about/me`     | you                  | your experience and achievements, in your words: a tailoring source |
+| `cvs/<variant>`| Claude, from Drive   | your CV versions in structured form (the tailoring templates) |
+| `tailored/<id>`| morning run / Claude | the tailored CV for a job, its change log, and check results |
+
+CVs and personal details live only in the dashboard's private database, never in this repo.
 
 The page source is in `dashboard/index.html`.
 
