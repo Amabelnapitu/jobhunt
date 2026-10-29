@@ -257,3 +257,21 @@ def test_title_seniority_rules():
     assert status("Assistant AI & Data Management and Governance Manager") == ELIGIBLE
     assert status("Product Manager - AI Finance App") == ELIGIBLE
     assert status("AI Product Manager (Management Trainee)") == ELIGIBLE
+
+
+def test_cut_descriptions_are_read_again_and_full_ones_kept(tmp_path):
+    long = "Role overview. " * 300 + "Fluent Mandarin is required."
+    conn = make_db(tmp_path, [job("Product Owner", "1")])
+    storage.save_details(conn, 1, {"description": long})
+    pipeline.rank_all(conn, PROFILE)
+    storage.export_sync(conn, tmp_path / "out")
+    doc = json.loads(next((tmp_path / "out" / "docs").glob("[0-9a-f]*.json")).read_text())
+    assert doc["description"] == long                    # no longer cut at 3000 characters
+
+    state = tmp_path / "state"
+    (state / "jobs").mkdir(parents=True)
+    doc["description"] = long[:3000]                     # a document written by the old code
+    (state / "jobs" / "x.json").write_text(json.dumps(doc))
+    fresh = storage.connect(tmp_path / "fresh.db")
+    storage.import_state(fresh, state)
+    assert fresh.execute("SELECT details_fetched_at FROM jobs").fetchone()[0] is None

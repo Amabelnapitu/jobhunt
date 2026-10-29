@@ -289,6 +289,10 @@ def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
                     title=values["title"] or "", company=values["company"] or "",
                     source=values["source"] or "", source_job_id=values["source_job_id"] or "",
                     first_seen=values["first_seen"] or _now(),
+                    # Documents written before full descriptions were kept were cut at exactly
+                    # 3000 characters; read those jobs' pages again rather than trust the cut text.
+                    details_fetched_at=None if len(values["description"] or "") == 3000 and values["source"] != "jobsdb"
+                    else values["details_fetched_at"],
                     last_seen=d.get("last_seen") or values["first_seen"] or _now())
                 cols = ", ".join(values)
                 conn.execute(f"INSERT OR REPLACE INTO jobs ({cols}) VALUES "
@@ -363,7 +367,9 @@ def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: i
             for f in ("documents", "info_needed", "languages"):
                 doc[f] = json.loads(r[f]) if r[f] else _JSON_FIELDS[f]
             doc["alt_urls"] = json.loads(r["alt_urls"]) if r["alt_urls"] else []
-            doc["description"] = (r["description"] or "")[:3000]
+            # Keep the whole description: requirements often come last, and eligibility is
+            # re-checked from this copy on later runs. (Documents may be up to 256 KiB.)
+            doc["description"] = (r["description"] or "")[:60000]
             path = docs_dir / f"{did}.json"
             path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
             writes.append({"op": "set", "collection": "jobs", "doc_id": did, "file_path": str(path.resolve())})

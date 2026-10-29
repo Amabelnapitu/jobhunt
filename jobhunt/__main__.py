@@ -102,7 +102,9 @@ def cv_check(args) -> int:
     from . import cv
     tailored = json.loads(args.tailored.read_text(encoding="utf-8"))
     base = json.loads(args.base.read_text(encoding="utf-8"))
-    result = cv.check(tailored, base, cv.load_corpus(args.sources), tuple(args.droppable))
+    base = base.get("cv", base)
+    # Accepts the tailored-CV document (CV under "cv") or a bare CV.
+    result = cv.check(tailored.get("cv", tailored), base, cv.load_corpus(args.sources), tuple(args.droppable))
     tailored["checks"] = result
     args.tailored.write_text(json.dumps(tailored, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False))

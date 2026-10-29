@@ -26,7 +26,8 @@ Work in a scratch folder (call it `$W`) for state and sync files; run commands f
 
 1. **Set up.** If the repo isn't checked out, clone it:
    `git clone https://github.com/Amabelnapitu/jobhunt` (use the default branch). Then
-   `pip install -r requirements.txt`.
+   `python -m pip install -r requirements.txt` (use `python -m pip` so packages go to the same
+   Python that runs the commands).
 
 2. **Check the network.**
    `curl -sS -o /dev/null -w "%{http_code}" "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=analyst&location=Hong%20Kong"`
