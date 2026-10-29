@@ -463,7 +463,7 @@ function listFor(view) {
   if (view === "today") return (state.run && state.run.picks || []).map(getJob)
     .filter(j => j && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored");
   if (view === "earlier") return jobs.filter(j => !picks.has(j.id) && !DONE.includes(statusOf(j.id)) && statusOf(j.id) !== "ignored"
-      && (["interested", "queued", "needs_input"].includes(statusOf(j.id)) || j.last_picked))
+      && (["interested", "queued", "needs_input"].includes(statusOf(j.id)) || (j.last_picked && j.eligibility !== "ineligible")))
     .sort((a, b) => (statusOf(b.id) === "interested") - (statusOf(a.id) === "interested") || (b.last_picked || "").localeCompare(a.last_picked || "") || byRank(a, b));
   if (view === "all") return jobs.filter(j => j.eligibility !== "ineligible" && !DONE.includes(statusOf(j.id))).sort(byRank);
   if (view === "excluded") return jobs.filter(j => j.eligibility === "ineligible").sort((a, b) => (b.score || 0) - (a.score || 0));

@@ -195,10 +195,21 @@ def pick_today(conn: sqlite3.Connection, n: int, today: str | None = None) -> li
 
     Only jobs whose page was read qualify: eligibility and required documents come from it."""
     today = today or date.today().isoformat()
-    rows = conn.execute(
+    candidates = conn.execute(
         "SELECT * FROM jobs WHERE rank_score IS NOT NULL AND details_fetched_at IS NOT NULL AND status NOT IN "
-        f"({','.join('?' * len(DONE))}) ORDER BY rank_score DESC, posted DESC LIMIT ?",
-        (*DONE, n)).fetchall()
+        f"({','.join('?' * len(DONE))}) ORDER BY rank_score DESC, posted DESC",
+        DONE).fetchall()
+    # The same posting can appear on JobsDB and LinkedIn under slightly different company names;
+    # enrichment links them through alt_urls, so a job already picked via one link is skipped.
+    rows, seen = [], set()
+    for r in candidates:
+        links = {r["url"], *json.loads(r["alt_urls"] or "[]")} - {"", None}
+        if links & seen:
+            continue
+        seen |= links
+        rows.append(r)
+        if len(rows) == n:
+            break
     with conn:
         # Picking again the same day replaces that day's picks.
         conn.execute("UPDATE jobs SET pick_date = NULL WHERE pick_date = ?", (today,))
@@ -293,6 +304,9 @@ def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
                     # 3000 characters; read those jobs' pages again rather than trust the cut text.
                     details_fetched_at=None if len(values["description"] or "") == 3000 and values["source"] != "jobsdb"
                     else values["details_fetched_at"],
+                    # A JobsDB job's long text came from LinkedIn; look it up there again.
+                    **({"description": values["snippet"] or "", "alt_urls": None}
+                       if len(values["description"] or "") == 3000 and values["source"] == "jobsdb" else {}),
                     last_seen=d.get("last_seen") or values["first_seen"] or _now())
                 cols = ", ".join(values)
                 conn.execute(f"INSERT OR REPLACE INTO jobs ({cols}) VALUES "

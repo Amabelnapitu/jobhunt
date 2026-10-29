@@ -275,3 +275,17 @@ def test_cut_descriptions_are_read_again_and_full_ones_kept(tmp_path):
     fresh = storage.connect(tmp_path / "fresh.db")
     storage.import_state(fresh, state)
     assert fresh.execute("SELECT details_fetched_at FROM jobs").fetchone()[0] is None
+
+
+def test_same_job_on_two_boards_is_picked_once(tmp_path):
+    a = Job("linkedin", "1", "FICC AI Product Manager", "Huatai International Financial Holdings", "HK",
+            "https://li/1", posted=date.today().isoformat())
+    b = Job("jobsdb", "2", "FICC AI Product Manager", "Huatai International", "HK",
+            "https://hk.jobsdb.com/job/2", posted=date.today().isoformat())
+    conn = make_db(tmp_path, [a, b])
+    for i in (1, 2):
+        storage.save_details(conn, i, {"description": "Good English. " * 40})
+    conn.execute("UPDATE jobs SET alt_urls = ? WHERE id = 2", (json.dumps(["https://li/1"]),))
+    conn.commit()
+    pipeline.rank_all(conn, PROFILE)
+    assert len(storage.pick_today(conn, 20)) == 1
