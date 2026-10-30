@@ -25,16 +25,19 @@ construction and engineering "project manager" roles, which would otherwise floo
    name not found in your sources.
 4. **Saved & earlier, tracker**: jobs you save, and picks from earlier days, stay available after
    they drop out of the top 20. The tracker shows every application by stage, with dates.
-5. **One-click applying**: each tailored CV is printed to a PDF and checked to be exactly one A4
-   page (`python -m jobhunt cv-pdf`). On the dashboard, press **Apply** on a job you've
-   reviewed: that queues it. A scheduled task in the Claude desktop app on your computer runs
-   `.claude/skills/apply-jobs` every hour, submits queued applications in your signed-in
-   browser with the PDF attached, and marks them Applied. Anything it can't answer from your
-   CV, About me or saved answers (and any login, verification code or CAPTCHA) comes back as
-   **Needs you**. The older manual route still works: say "apply to my approved jobs".
-6. (Old step, kept for reference) In the Claude app, say "apply to my ready jobs". Claude follows
-   `.claude/skills/apply-jobs`: fills each form in your signed-in browser, shows you the filled
-   form, and submits only after your OK. It never invents answers and never applies twice.
+5. **Lanes**: every job is sorted by how it can be applied to (`jobhunt/lanes.py`):
+   - *Claude applies* (Greenhouse, Lever, Ashby, simple forms): with auto-approve on, the morning
+     run approves these picks; press *Don't apply* on any you don't want. A scheduled task runs
+     `.claude/skills/apply-jobs` and submits them in your signed-in Chrome with the tailored PDF
+     and your standing answers.
+   - *Your turn* (Workday, iCIMS, Oracle, SuccessFactors, HKSTP, JobsDB, LinkedIn Easy Apply, or
+     any question the worker couldn't answer): the card shows the PDF, the link and why; apply
+     there and press *I applied*.
+   - *Skipped*: closed postings (the best-ranked LinkedIn jobs are re-checked each run), roles
+     outside Hong Kong, ineligible jobs.
+6. **Standing answers** (About me): visa wording, sponsorship, nationality, salary with currency
+   and period, languages, consent and cover-letter policies. Fill them once; forms are answered
+   from them, and anything new comes back as *Your turn*.
 
 ### Ranking
 

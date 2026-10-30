@@ -4,7 +4,7 @@ import json
 import sys
 from datetime import date
 
-from . import storage
+from . import lanes, storage
 from .analysis import analyze
 from .ranking import rank
 from .sources import DETAILS
@@ -47,7 +47,32 @@ def rank_all(conn, profile: dict, today: date | None = None) -> None:
             "years_required": a.years_required, "eligibility": ranked.eligibility,
             "reasons": ranked.reasons, "interview": ranked.interview, "freshness": ranked.freshness,
             "rank_score": ranked.rank_score,
+            **lanes.lane(r["apply_method"] or "", r["apply_url"] or "", r["location"] or "",
+                         ranked.eligibility, bool(r["closed"])),
         })
+
+
+def check_open(conn, profile: dict) -> int:
+    """Re-read the LinkedIn page of the best-ranked jobs to catch postings that have closed
+    since their details were read. Returns how many were found closed."""
+    limit = profile.get("ranking", {}).get("recheck_open", 30)
+    rows = conn.execute(
+        "SELECT * FROM jobs WHERE source = 'linkedin' AND rank_score IS NOT NULL AND COALESCE(closed, 0) = 0 "
+        f"AND details_fetched_at < ? AND status NOT IN ({','.join('?' * len(storage.DONE))}) "
+        "ORDER BY rank_score DESC LIMIT ?", (date.today().isoformat(), *storage.DONE, limit)).fetchall()
+    closed = 0
+    for r in rows:
+        try:
+            details = DETAILS["linkedin"](r["source_job_id"])
+        except Exception as exc:
+            print(f"[open] {r['title']!r}: FAILED ({exc})", file=sys.stderr)
+            continue
+        if details.get("closed"):
+            with conn:
+                conn.execute("UPDATE jobs SET closed = 1 WHERE id = ?", (r["id"],))
+            closed += 1
+    print(f"[open] rechecked {len(rows)} jobs, {closed} closed", file=sys.stderr)
+    return closed
 
 
 def summary(conn) -> dict:

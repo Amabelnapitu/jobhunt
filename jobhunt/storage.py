@@ -79,6 +79,10 @@ LATER_COLUMNS = {
     "details_fetched_at": "TEXT",
     "alt_urls": "TEXT",                 # JSON list: the same job found elsewhere (employer site, JobsDB)
     "remote_exists": "INTEGER",         # 1 when the dashboard already has this job's document
+    "closed": "INTEGER",                # 1 when the posting says it no longer takes applications
+    "lane": "TEXT",                     # auto | you | skip (see lanes.py)
+    "ats": "TEXT",                      # the platform the application runs on
+    "lane_reason": "TEXT",              # why a job is in the you/skip lane
 }
 
 # Scraped fields refreshed on every sighting. status/notes/first_seen are never overwritten.
@@ -178,9 +182,10 @@ def save_details(conn: sqlite3.Connection, job_id: int, details: dict) -> None:
     with conn:
         conn.execute(
             "UPDATE jobs SET description = ?, apply_url = ?, apply_method = ?, applicants = ?, "
-            "seniority = ?, details_fetched_at = ? WHERE id = ?",
+            "seniority = ?, closed = ?, details_fetched_at = ? WHERE id = ?",
             (details.get("description", ""), details.get("apply_url", ""), details.get("apply_method", ""),
-             details.get("applicants"), details.get("seniority", ""), _now(), job_id))
+             details.get("applicants"), details.get("seniority", ""), int(bool(details.get("closed"))),
+             _now(), job_id))
 
 
 def save_ranking(conn: sqlite3.Connection, job_id: int, fields: dict) -> None:
@@ -196,7 +201,8 @@ def pick_today(conn: sqlite3.Connection, n: int, today: str | None = None) -> li
     Only jobs whose page was read qualify: eligibility and required documents come from it."""
     today = today or date.today().isoformat()
     candidates = conn.execute(
-        "SELECT * FROM jobs WHERE rank_score IS NOT NULL AND details_fetched_at IS NOT NULL AND status NOT IN "
+        "SELECT * FROM jobs WHERE rank_score IS NOT NULL AND details_fetched_at IS NOT NULL "
+        "AND COALESCE(lane, '') != 'skip' AND status NOT IN "
         f"({','.join('?' * len(DONE))}) ORDER BY rank_score DESC, posted DESC",
         DONE).fetchall()
     # The same posting can appear on JobsDB and LinkedIn under slightly different company names;
@@ -321,6 +327,8 @@ def import_state(conn: sqlite3.Connection, state_dir: Path) -> tuple[int, int]:
             for did, rank in ranks.items():
                 if rank.get("last_picked") and did in ids:
                     conn.execute("UPDATE jobs SET pick_date = ? WHERE id = ?", (rank["last_picked"], ids[did]))
+                if rank.get("lane_reason") == "Posting closed" and did in ids:
+                    conn.execute("UPDATE jobs SET closed = 1 WHERE id = ?", (ids[did],))
     if tracking_dir.is_dir():
         ids = {doc_id(r["dedupe_key"]): r["id"] for r in conn.execute("SELECT id, dedupe_key FROM jobs")}
         with conn:
@@ -374,6 +382,7 @@ def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: i
             "eligibility": r["eligibility"], "reasons": json.loads(r["reasons"] or "[]"),
             "interview": r["interview"], "freshness": r["freshness"], "rank_score": r["rank_score"],
             "last_seen": r["last_seen"], "last_picked": r["pick_date"],
+            "lane": r["lane"], "ats": r["ats"], "lane_reason": r["lane_reason"],
         }
         if not r["remote_exists"]:
             doc = {f: r[f] for f in _STATIC_FIELDS}

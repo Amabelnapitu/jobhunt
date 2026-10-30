@@ -61,6 +61,8 @@ def scrape(args, conn) -> None:
         enrich.enrich(conn, profile.get("ranking", {}).get("max_enrich_per_run", 40))
         storage.rescore(conn, lambda j: score_job(j, scoring, categories))  # with full descriptions
     pipeline.rank_all(conn, profile)
+    if not args.no_details and pipeline.check_open(conn, profile):
+        pipeline.rank_all(conn, profile)  # closed postings move to the skip lane
     picks = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20))
     exported = storage.export_csv(conn, args.out, args.min_score)
 

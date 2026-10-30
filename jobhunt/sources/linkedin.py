@@ -62,7 +62,8 @@ def parse_detail(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     desc = soup.select_one(".show-more-less-html__markup") or soup.select_one(".description__text")
     details = {"description": desc.get_text("\n", strip=True) if desc else "",
-               "apply_url": "", "apply_method": "linkedin_easy_apply", "applicants": None, "seniority": ""}
+               "apply_url": "", "apply_method": "linkedin_easy_apply", "applicants": None, "seniority": "",
+               "closed": "no longer accepting applications" in soup.get_text(" ", strip=True).lower()}
 
     caption = soup.select_one(".num-applicants__caption")
     if caption:

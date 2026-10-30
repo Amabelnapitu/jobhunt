@@ -64,6 +64,7 @@ check_factor = 0.85             # discount for "check" jobs (stretch or unclear)
 detail_min_score = 10           # only open the job page for jobs scoring at least this
 max_details_per_run = 80        # politeness cap on job pages opened per run
 max_enrich_per_run = 40         # jobs looked up elsewhere (employer site, JobsDB) per run
+recheck_open = 30               # best-ranked LinkedIn jobs re-read each run to catch closed postings
 
 [scoring]
 # Whole-word/phrase matches, case-insensitive. Weight counts x2 if found in the title, x1 if only in the snippet.
