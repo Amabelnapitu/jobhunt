@@ -37,7 +37,9 @@ def scrape(args, conn) -> None:
     run_id = storage.start_run(conn, args.sources)
     found: dict[tuple[str, str], Job] = {}
     queries: dict[tuple[str, str], set[str]] = {}
+    complete: set[str] = set()  # sources that answered every query: absence from them means closed
     for name in args.sources:
+        failed = False
         for query in search["queries"]:
             try:
                 count = 0
@@ -48,9 +50,13 @@ def scrape(args, conn) -> None:
                 print(f"[{name}] {query!r}: {count} results", file=sys.stderr)
             except RateLimited as exc:  # the site asked us to slow down: stop asking it today
                 print(f"[{name}] {exc}", file=sys.stderr)
+                failed = True
                 break
             except Exception as exc:  # one broken source/query shouldn't kill the run
                 print(f"[{name}] {query!r}: FAILED ({exc})", file=sys.stderr)
+                failed = True
+        if not failed:
+            complete.add(name)
 
     jobs = [score_job(j, scoring, categories) for j in found.values()]
     new = storage.save_jobs(conn, run_id, jobs, queries)
@@ -61,9 +67,10 @@ def scrape(args, conn) -> None:
         enrich.enrich(conn, profile.get("ranking", {}).get("max_enrich_per_run", 40))
         storage.rescore(conn, lambda j: score_job(j, scoring, categories))  # with full descriptions
     pipeline.rank_all(conn, profile)
-    if not args.no_details and pipeline.check_open(conn, profile):
+    if not args.no_details and pipeline.check_open(conn, profile, complete, days, run_id):
         pipeline.rank_all(conn, profile)  # closed postings move to the skip lane
-    picks = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20))
+    picks = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20),
+                               per_company=profile.get("ranking", {}).get("max_per_company", 2))
     exported = storage.export_csv(conn, args.out, args.min_score)
 
     print(f"\n{len(jobs)} jobs this run, {len(new)} new. {pipeline.summary(conn)}")
@@ -94,7 +101,8 @@ def rank_cmd(args, conn) -> None:
         enrich.enrich(conn, profile.get("ranking", {}).get("max_enrich_per_run", 40))
         storage.rescore(conn, lambda j: score_job(j, scoring, categories))
     pipeline.rank_all(conn, profile)
-    rows = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20))
+    rows = storage.pick_today(conn, profile.get("ranking", {}).get("daily_picks", 20),
+                               per_company=profile.get("ranking", {}).get("max_per_company", 2))
     print(pipeline.summary(conn))
     for r in rows:
         print(pipeline.describe(r))

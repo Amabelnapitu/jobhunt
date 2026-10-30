@@ -166,7 +166,7 @@ def rescore(conn: sqlite3.Connection, score) -> None:
 
 
 def needing_details(conn: sqlite3.Connection, min_score: int, limit: int,
-                    free_sources: tuple[str, ...] = ("jobsdb",)) -> list[sqlite3.Row]:
+                    free_sources: tuple[str, ...] = ("jobsdb", "boards")) -> list[sqlite3.Row]:
     """Jobs whose details we haven't got yet, best first. `limit` caps only the sources that
     cost a page request; free_sources (details from data we already have) are all included."""
     rows = conn.execute(
@@ -195,7 +195,8 @@ def save_ranking(conn: sqlite3.Connection, job_id: int, fields: dict) -> None:
         conn.execute(f"UPDATE jobs SET {cols} WHERE id = :id", {**fields, "id": job_id})
 
 
-def pick_today(conn: sqlite3.Connection, n: int, today: str | None = None) -> list[sqlite3.Row]:
+def pick_today(conn: sqlite3.Connection, n: int, today: str | None = None,
+               per_company: int = 2) -> list[sqlite3.Row]:
     """Mark today's top-n ranked jobs that haven't been applied to (or dismissed).
 
     Only jobs whose page was read qualify: eligibility and required documents come from it."""
@@ -207,11 +208,22 @@ def pick_today(conn: sqlite3.Connection, n: int, today: str | None = None) -> li
         DONE).fetchall()
     # The same posting can appear on JobsDB and LinkedIn under slightly different company names;
     # enrichment links them through alt_urls, so a job already picked via one link is skipped.
-    rows, seen = [], set()
+    from .enrich import same_job  # late import: enrich imports this module
+
+    # The same role found on another site under a slightly different title or company name
+    # (LinkedIn's "Doit" vs Bjak's own board) must never be picked again once acted on.
+    done = conn.execute(f"SELECT title, company FROM jobs WHERE status IN ({','.join('?' * len(DONE))})",
+                        DONE).fetchall()
+    # Employers that post many near-identical roles would otherwise fill the whole list.
+    rows, seen, per = [], set(), {}
     for r in candidates:
         links = {r["url"], *json.loads(r["alt_urls"] or "[]")} - {"", None}
-        if links & seen:
+        company = " ".join((r["company"] or "").lower().split())
+        if links & seen or per.get(company, 0) >= per_company:
             continue
+        if any(same_job(r["title"], r["company"], d["title"], d["company"]) for d in done):
+            continue
+        per[company] = per.get(company, 0) + 1
         seen |= links
         rows.append(r)
         if len(rows) == n:

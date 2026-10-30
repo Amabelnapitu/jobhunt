@@ -55,6 +55,7 @@ written_chinese = "none"
 
 [ranking]
 daily_picks = 20                # how many top jobs to put up for applying each day
+max_per_company = 2             # at most this many of the day's picks from one employer
 # Weights for rank_score (0-100). Ineligible jobs are never ranked.
 fit = 0.40                      # match with this profile
 interview = 0.35                # estimated chance of an interview

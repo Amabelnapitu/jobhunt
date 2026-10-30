@@ -95,6 +95,8 @@ def _employer_url(r) -> str:
 
 
 def needs_enrichment(r) -> bool:
+    if r["source"] == "boards":  # already the employer's own posting, full text included
+        return False
     short = len(r["description"] or "") < MIN_GOOD_DESCRIPTION
     easy_apply = r["apply_method"] == "linkedin_easy_apply"
     return short or easy_apply or bool(_employer_url(r))

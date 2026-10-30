@@ -79,6 +79,17 @@ The page source is in `dashboard/index.html`.
 | JobsDB   | The JSON search endpoint the JobsDB site calls, plus each job's page |
 | LinkedIn | The public (logged-out) job search and job pages; no login |
 | Employer careers sites | Followed from LinkedIn's apply links: Greenhouse and Lever public APIs, or the page's schema.org JobPosting data |
+| Employer job boards | `jobhunt/sources/boards.py`: Hong Kong openings on employers' own Greenhouse, Lever and Ashby boards (OKX, Crypto.com, Lalamove, Airwallex, Bjak, IMC, Bybit, Agoda and more), read through their public job-board APIs. These are all *Claude applies* jobs. Add an employer by adding its board to `BOARDS`. |
+
+Indeed HK, eFinancialCareers and CTgoodjobs were checked and block automated access, and HKSTP's
+talent pool has no public API, so they aren't sources: the scraper never works around a block.
+
+**Closed postings** are caught three ways: LinkedIn's "No longer accepting applications", a job
+gone from its employer board, and a JobsDB job inside the search window that today's full JobsDB
+search no longer returns. Closed jobs move to the *Skipped* lane.
+
+**Daily picks** take at most `max_per_company` jobs (default 2) from one employer, and never a
+role you've already applied to under a slightly different title or company name on another site.
 
 LinkedIn jobs with a short description or Easy Apply only are also looked up on JobsDB (same
 title and company), which often has the full text and a way to apply without LinkedIn. When a

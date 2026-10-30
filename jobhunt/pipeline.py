@@ -2,7 +2,7 @@
 
 import json
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 from . import lanes, storage
 from .analysis import analyze
@@ -52,18 +52,33 @@ def rank_all(conn, profile: dict, today: date | None = None) -> None:
         })
 
 
-def check_open(conn, profile: dict) -> int:
-    """Re-read the LinkedIn page of the best-ranked jobs to catch postings that have closed
-    since their details were read. Returns how many were found closed."""
+def check_open(conn, profile: dict, complete: set[str] = frozenset(), days: int = 14,
+               run_id: int | None = None) -> int:
+    """Catch postings that closed since their details were read. Returns how many closed.
+
+    - JobsDB: a job posted inside the search window that this run's full search no longer
+      returns has been taken down (JobsDB's own pages can't be re-read).
+    - LinkedIn and employer boards: re-read the best-ranked jobs; LinkedIn says "No longer
+      accepting applications", a board simply drops the job."""
+    closed = 0
+    if "jobsdb" in complete and run_id is not None:
+        since = (date.today() - timedelta(days=days - 1)).isoformat()
+        with conn:
+            closed += conn.execute(
+                "UPDATE jobs SET closed = 1 WHERE source = 'jobsdb' AND COALESCE(closed, 0) = 0 "
+                "AND posted >= ? AND last_seen < (SELECT started_at FROM runs WHERE id = ?)",
+                (since, run_id)).rowcount
     limit = profile.get("ranking", {}).get("recheck_open", 30)
     rows = conn.execute(
-        "SELECT * FROM jobs WHERE source = 'linkedin' AND rank_score IS NOT NULL AND COALESCE(closed, 0) = 0 "
-        f"AND details_fetched_at < ? AND status NOT IN ({','.join('?' * len(storage.DONE))}) "
-        "ORDER BY rank_score DESC LIMIT ?", (date.today().isoformat(), *storage.DONE, limit)).fetchall()
-    closed = 0
+        "SELECT * FROM jobs WHERE source IN ('linkedin', 'boards') AND rank_score IS NOT NULL "
+        "AND COALESCE(closed, 0) = 0 AND details_fetched_at < ? "
+        f"AND status NOT IN ({','.join('?' * len(storage.DONE))}) ORDER BY rank_score DESC LIMIT ?",
+        (date.today().isoformat(), *storage.DONE, limit)).fetchall()
     for r in rows:
+        if r["source"] == "boards" and "boards" not in complete:
+            continue  # a board that failed to load this run says nothing about its jobs
         try:
-            details = DETAILS["linkedin"](r["source_job_id"])
+            details = DETAILS[r["source"]](r["source_job_id"], r["snippet"] or "")
         except Exception as exc:
             print(f"[open] {r['title']!r}: FAILED ({exc})", file=sys.stderr)
             continue
@@ -71,7 +86,7 @@ def check_open(conn, profile: dict) -> int:
             with conn:
                 conn.execute("UPDATE jobs SET closed = 1 WHERE id = ?", (r["id"],))
             closed += 1
-    print(f"[open] rechecked {len(rows)} jobs, {closed} closed", file=sys.stderr)
+    print(f"[open] rechecked {len(rows)} jobs; {closed} closed in all", file=sys.stderr)
     return closed
 
 

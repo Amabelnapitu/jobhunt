@@ -289,3 +289,22 @@ def test_same_job_on_two_boards_is_picked_once(tmp_path):
     conn.commit()
     pipeline.rank_all(conn, PROFILE)
     assert len(storage.pick_today(conn, 20)) == 1
+
+
+def test_pick_skips_roles_already_applied_to_elsewhere_and_caps_per_company(tmp_path):
+    from jobhunt import storage
+    from jobhunt.models import Job
+    conn = storage.connect(tmp_path / "j.db")
+    run = storage.start_run(conn, ["test"])
+    jobs = [Job("linkedin", "1", "Product Manager - AI Finance App", "Doit", "Hong Kong", "u1"),
+            Job("boards", "2", "Product Manager - AI Finance", "Bjak (Doit)", "Hong Kong", "u2"),
+            Job("boards", "3", "Product Owner - AI Investing", "Bjak (Doit)", "Hong Kong", "u3"),
+            Job("boards", "4", "Product Owner - AI Stockbroking", "Bjak (Doit)", "Hong Kong", "u4"),
+            Job("boards", "5", "Product Owner - AI Neobank", "Bjak (Doit)", "Hong Kong", "u5")]
+    storage.save_jobs(conn, run, jobs, {})
+    with conn:
+        conn.execute("UPDATE jobs SET rank_score = 50, details_fetched_at = 'x'")
+        conn.execute("UPDATE jobs SET status = 'applied' WHERE source_job_id = '1'")
+    picked = [r["source_job_id"] for r in storage.pick_today(conn, 10, per_company=2)]
+    assert "2" not in picked          # same role as the Doit application
+    assert len(picked) == 2           # two of the remaining three Bjak roles
