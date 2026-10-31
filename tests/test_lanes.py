@@ -38,3 +38,10 @@ def test_linkedin_closed_posting_is_detected():
     html = '<div class="description__text">Great job</div><span>No longer accepting applications</span>'
     assert parse_detail(html)["closed"] is True
     assert parse_detail('<div class="description__text">Open</div>')["closed"] is False
+
+
+def test_clock_is_hong_kong_time():
+    from datetime import datetime, timedelta, timezone
+    from jobhunt import clock
+    expected = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8)
+    assert abs(clock.now() - expected) < timedelta(seconds=5)

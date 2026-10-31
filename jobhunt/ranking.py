@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
+from . import clock
 from .analysis import Analysis
 
 ELIGIBLE, CHECK, INELIGIBLE = "eligible", "check", "ineligible"
@@ -124,7 +125,7 @@ def rank(fit_score: int, a: Analysis, title: str, matched: list[str], posted: st
     status, reasons = eligibility(a, title, candidate, has_description)
     r = Ranked(status, reasons)
     r.interview = interview_score(a, title, matched, applicants, candidate, domain_hit)
-    r.freshness = freshness(posted, today or date.today())
+    r.freshness = freshness(posted, today or clock.today())
     if status == INELIGIBLE:
         return r
     fit = max(0, min(100, fit_score * 100 / weights.get("fit_full_marks", 50)))

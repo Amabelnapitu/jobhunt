@@ -4,7 +4,7 @@ import json
 import sys
 from datetime import date, timedelta
 
-from . import lanes, storage
+from . import clock, lanes, storage
 from .analysis import analyze
 from .ranking import rank
 from .sources import DETAILS
@@ -62,7 +62,7 @@ def check_open(conn, profile: dict, complete: set[str] = frozenset(), days: int 
       accepting applications", a board simply drops the job."""
     closed = 0
     if "jobsdb" in complete and run_id is not None:
-        since = (date.today() - timedelta(days=days - 1)).isoformat()
+        since = (clock.today() - timedelta(days=days - 1)).isoformat()
         with conn:
             closed += conn.execute(
                 "UPDATE jobs SET closed = 1 WHERE source = 'jobsdb' AND COALESCE(closed, 0) = 0 "
@@ -73,7 +73,7 @@ def check_open(conn, profile: dict, complete: set[str] = frozenset(), days: int 
         "SELECT * FROM jobs WHERE source IN ('linkedin', 'boards') AND rank_score IS NOT NULL "
         "AND COALESCE(closed, 0) = 0 AND details_fetched_at < ? "
         f"AND status NOT IN ({','.join('?' * len(storage.DONE))}) ORDER BY rank_score DESC LIMIT ?",
-        (date.today().isoformat(), *storage.DONE, limit)).fetchall()
+        (clock.today().isoformat(), *storage.DONE, limit)).fetchall()
     for r in rows:
         if r["source"] == "boards" and "boards" not in complete:
             continue  # a board that failed to load this run says nothing about its jobs

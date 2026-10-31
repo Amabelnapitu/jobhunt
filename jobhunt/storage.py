@@ -11,6 +11,7 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from . import clock
 from .models import Job
 
 STATUSES = ("new", "interested", "ready", "applied", "interviewing", "offer", "rejected", "ignored")
@@ -102,7 +103,7 @@ RETURNING id, first_run_id = :run_id AS is_new
 
 
 def _now() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+    return clock.now().isoformat(timespec="seconds")
 
 
 def doc_id(dedupe_key: str) -> str:
@@ -200,7 +201,7 @@ def pick_today(conn: sqlite3.Connection, n: int, today: str | None = None,
     """Mark today's top-n ranked jobs that haven't been applied to (or dismissed).
 
     Only jobs whose page was read qualify: eligibility and required documents come from it."""
-    today = today or date.today().isoformat()
+    today = today or clock.today().isoformat()
     candidates = conn.execute(
         "SELECT * FROM jobs WHERE rank_score IS NOT NULL AND details_fetched_at IS NOT NULL "
         "AND COALESCE(lane, '') != 'skip' AND status NOT IN "
@@ -364,7 +365,7 @@ def export_sync(conn: sqlite3.Connection, out_dir: Path, min_fit_for_excluded: i
     excluded). Creates job documents for the ones the dashboard doesn't have yet, writes one
     runs/ document with every shown job's current rank, and deletes job documents you never
     acted on that dropped out or weren't seen for keep_days."""
-    now = now or datetime.now()
+    now = now or clock.now()
     cutoff = (now.date() - timedelta(days=keep_days)).isoformat()
     docs_dir = out_dir / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
